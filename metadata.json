@@ -1,0 +1,8 @@
+{
+  "name": "Remix Studify",
+  "description": "A mobile-friendly academic repository for students to discover and share Previous Year Question papers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

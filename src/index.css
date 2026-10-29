@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-base: #050914;
+    --bg-secondary: #0A1222;
+    --bg-surface: #101B2D;
+    --border-subtle: rgba(148, 163, 184, 0.16);
+    --border-hover: rgba(148, 163, 184, 0.28);
+    --text-primary: #F8FAFC;
+    --text-secondary: #A7B4C8;
+    --text-muted: #64748B;
+    --accent-cyan: #38BDF8;
+    --accent-teal: #22D3C5;
+    --accent-blue: #2563EB;
+    --accent-emerald: #22C55E;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #050914;
+    color: #F8FAFC;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Custom atmospheric dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #050914;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1E293B;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+
+  *:focus-visible {
+    outline: 2px solid rgba(56, 189, 248, 0.5);
+    outline-offset: 2px;
+  }
+}
+
+/* Atmospheric Layered Gradient Background inspired by user reference */
+.atmospheric-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background-color: #050914;
+  background-image:
+    /* Deep midnight navy base */
+    radial-gradient(circle at 50% 50%, rgba(5, 9, 20, 0.9) 0%, #050914 100%),
+    /* Soft blurred cyan & teal illumination toward left-centre */
+    radial-gradient(circle at 25% 45%, rgba(34, 211, 197, 0.22) 0%, rgba(56, 189, 248, 0.12) 30%, transparent 65%),
+    /* Deep blue and electric blue illumination toward upper middle */
+    radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.28) 0%, rgba(29, 78, 216, 0.15) 35%, transparent 70%),
+    /* Emerald and green illumination toward centre-right */
+    radial-gradient(circle at 75% 45%, rgba(34, 197, 94, 0.20) 0%, rgba(16, 185, 129, 0.10) 35%, transparent 65%),
+    /* Subtle bottom cyan reflection */
+    radial-gradient(circle at 40% 85%, rgba(56, 189, 248, 0.12) 0%, transparent 55%);
+}
+
+/* Subtle glow helper */
+.ambient-glow-cyan {
+  box-shadow: 0 0 40px -10px rgba(56, 189, 248, 0.25);
+}
+
+.ambient-glow-emerald {
+  box-shadow: 0 0 40px -10px rgba(34, 197, 94, 0.25);
+}
