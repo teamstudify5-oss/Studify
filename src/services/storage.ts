@@ -3,8 +3,28 @@ import { SAMPLE_PAPERS } from '../data/samplePapers';
 import { supabaseDb } from './supabaseDb';
 import { supabaseStorage } from './supabaseStorage';
 
-const PAPERS_STORAGE_KEY = 'pyq_papers_v2';
-const SAVED_PAPERS_STORAGE_KEY = 'pyq_saved_paper_ids_v2';
+const PAPERS_STORAGE_KEY = 'pyq_papers_clean_v3';
+const SAVED_PAPERS_STORAGE_KEY = 'pyq_saved_paper_ids_clean_v3';
+const LEGACY_PAPERS_PURGED = 'studify_test_papers_purged_v3';
+
+// Clean out preexisting test papers from localStorage
+function purgeLegacyTestPapers() {
+  try {
+    if (!localStorage.getItem(LEGACY_PAPERS_PURGED)) {
+      localStorage.removeItem('pyq_papers_v2');
+      localStorage.removeItem('pyq_papers');
+      localStorage.removeItem('pyq_saved_paper_ids_v2');
+      localStorage.removeItem('pyq_saved_paper_ids');
+      localStorage.removeItem(PAPERS_STORAGE_KEY);
+      localStorage.removeItem(SAVED_PAPERS_STORAGE_KEY);
+      localStorage.setItem(LEGACY_PAPERS_PURGED, 'true');
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+purgeLegacyTestPapers();
 
 export const storageService = {
   // Sync papers from Supabase
@@ -22,39 +42,16 @@ export const storageService = {
     }
   },
 
-  // Initialize storage with sample data if not present
+  // Initialize storage cleanly - blank if empty
   getPapers(): Paper[] {
     try {
       const stored = localStorage.getItem(PAPERS_STORAGE_KEY);
       if (!stored) {
-        const initialized = SAMPLE_PAPERS.map((p, idx) => ({
-          ...p,
-          rating: Number((4.6 + (idx % 4) * 0.1).toFixed(1)),
-          ratingCount: 18 + idx * 7,
-          reviews: [
-            {
-              id: `rev-${p.id}-1`,
-              stars: 5,
-              text: 'Very helpful question paper for exam preparation. Clean layout and legible questions.',
-              authorName: 'Student Reviewer',
-              createdAt: '2024-03-20T10:00:00.000Z',
-            },
-          ],
-          comments: [
-            {
-              id: `com-${p.id}-1`,
-              authorName: 'Rohan V.',
-              text: 'Does this set include numerical solution keys for Section B?',
-              createdAt: '2024-04-02T14:30:00.000Z',
-            },
-          ],
-        }));
-        localStorage.setItem(PAPERS_STORAGE_KEY, JSON.stringify(initialized));
-        return initialized;
+        return [];
       }
       return JSON.parse(stored);
     } catch {
-      return SAMPLE_PAPERS;
+      return [];
     }
   },
 

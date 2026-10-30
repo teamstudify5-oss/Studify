@@ -14,7 +14,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onSelectPaper,
   samplePapers,
 }) => {
-  const showcasePapers = samplePapers.slice(0, 3);
+  // Mechanism: Sort papers by ratings descending, displaying the top 3 highest-rated papers
+  const showcasePapers = [...samplePapers]
+    .filter((p) => p.status === 'approved')
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    .slice(0, 3);
 
   return (
     <div className="space-y-20 pb-20 overflow-hidden">
@@ -88,41 +92,62 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             />
 
             <div className="relative space-y-3 max-w-md mx-auto">
-              {showcasePapers.map((paper, index) => (
-                <div
-                  key={paper.id}
-                  onClick={() => onSelectPaper(paper)}
-                  className={`bg-[#101B2D]/85 backdrop-blur-xl border border-white/[0.14] hover:border-cyan-400/50 rounded-2xl p-4 transition-all duration-200 hover:-translate-y-1 cursor-pointer shadow-xl shadow-black/50 ${
-                    index === 1 ? 'lg:translate-x-3' : index === 2 ? 'lg:-translate-x-2' : ''
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-cyan-400">{paper.examBoard}</span>
-                      <span className="text-white/20">·</span>
-                      <span className="text-[#A7B4C8]">{paper.grade}</span>
-                      <span className="text-white/20">·</span>
-                      <span className="font-mono text-white/60">{paper.year}</span>
+              {showcasePapers.length > 0 ? (
+                showcasePapers.map((paper, index) => (
+                  <div
+                    key={paper.id}
+                    onClick={() => onSelectPaper(paper)}
+                    className={`bg-[#101B2D]/85 backdrop-blur-xl border border-white/[0.14] hover:border-cyan-400/50 rounded-2xl p-4 transition-all duration-200 hover:-translate-y-1 cursor-pointer shadow-xl shadow-black/50 ${
+                      index === 1 ? 'lg:translate-x-3' : index === 2 ? 'lg:-translate-x-2' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-cyan-400">{paper.examBoard}</span>
+                        <span className="text-white/20">·</span>
+                        <span className="text-[#A7B4C8]">{paper.grade}</span>
+                        <span className="text-white/20">·</span>
+                        <span className="font-mono text-white/60">{paper.year}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-amber-300 font-mono text-[11px]">
+                        <Star className="w-3 h-3 fill-amber-300" />
+                        <span>{paper.rating || '5.0'}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 text-amber-300 font-mono text-[11px]">
-                      <Star className="w-3 h-3 fill-amber-300" />
-                      <span>{paper.rating || '4.8'}</span>
+
+                    <h3 className="text-sm font-semibold text-[#F8FAFC] line-clamp-1">
+                      {paper.title}
+                    </h3>
+
+                    <div className="mt-2.5 pt-2 border-t border-white/[0.08] flex items-center justify-between text-xs text-[#A7B4C8]">
+                      <span className="font-mono text-[11px]">{paper.totalMarks} Marks · {paper.subject}</span>
+                      <span className="text-cyan-300 font-medium hover:underline text-[11px] flex items-center gap-0.5">
+                        <span>View Paper</span>
+                        <span>→</span>
+                      </span>
                     </div>
                   </div>
-
-                  <h3 className="text-sm font-semibold text-[#F8FAFC] line-clamp-1">
-                    {paper.title}
+                ))
+              ) : (
+                <div className="bg-[#101B2D]/85 backdrop-blur-xl border border-white/[0.14] rounded-2xl p-7 text-center space-y-3 shadow-xl shadow-black/50">
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 flex items-center justify-center mx-auto">
+                    <BookOpen className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-[#F8FAFC]">
+                    No Question Papers Published Yet
                   </h3>
-
-                  <div className="mt-2.5 pt-2 border-t border-white/[0.08] flex items-center justify-between text-xs text-[#A7B4C8]">
-                    <span className="font-mono text-[11px]">{paper.totalMarks} Marks · {paper.subject}</span>
-                    <span className="text-cyan-300 font-medium hover:underline text-[11px] flex items-center gap-0.5">
-                      <span>View Paper</span>
-                      <span>→</span>
-                    </span>
-                  </div>
+                  <p className="text-xs text-[#A7B4C8] leading-relaxed max-w-xs mx-auto">
+                    All test data has been cleared. Upload or browse the question paper repository.
+                  </p>
+                  <button
+                    onClick={onNavigateToSearch}
+                    className="inline-flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-semibold pt-1 cursor-pointer"
+                  >
+                    <span>Explore Question Papers</span>
+                    <span>→</span>
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

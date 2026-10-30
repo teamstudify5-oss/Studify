@@ -106,7 +106,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   // Quick navigation shortcuts
   const navigationActions = [
     { id: 'nav-workspace', title: 'Open Study Workspace & Projects', subtitle: 'Personal desktop, notes & tasks', icon: Folder, action: () => { onNavigate('workspace'); onClose(); } },
-    { id: 'nav-predictor', title: 'Exam Paper Predictor', subtitle: 'Rule-based pattern analysis & mock tests', icon: Sparkles, action: () => { onNavigate('exam-predictor'); onClose(); } },
     { id: 'nav-quick-capture', title: 'Quick Capture Thought / Formula', subtitle: 'Instant scratchpad capture', icon: Zap, action: () => { onClose(); onOpenQuickCapture(); } },
     { id: 'nav-browse', title: 'Explore All Past Question Papers', subtitle: 'Search CBSE, ICSE, JEE, NEET', icon: Search, action: () => { onNavigate('browse'); onClose(); } },
     { id: 'nav-bookmarks', title: 'View Saved Bookmarks', subtitle: 'Your starred papers', icon: Bookmark, action: () => { onNavigate('profile-bookmarks'); onClose(); } },

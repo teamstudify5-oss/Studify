@@ -16,7 +16,6 @@ import { storageService } from './services/storage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { supabase } from './supabaseClient.js';
 import { WorkspacePage } from './pages/WorkspacePage';
-import { ExamPredictorPage } from './pages/ExamPredictorPage';
 import { CommandCenter } from './components/workspace/CommandCenter';
 import { QuickCaptureModal } from './components/workspace/QuickCaptureModal';
 import { workspaceService } from './services/workspaceService';
@@ -69,8 +68,6 @@ function MainApp() {
 
     if (path === 'workspace') {
       setCurrentTab('workspace');
-    } else if (path === 'exam-predictor' || path === 'predictor') {
-      setCurrentTab('exam-predictor');
     } else if (path === 'login') {
       setCurrentTab('login');
     } else if (path === 'signup') {
@@ -409,23 +406,7 @@ function MainApp() {
               setCurrentTab('browse');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            onNavigateToPredictor={() => {
-              setCurrentTab('exam-predictor');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
             initialProjectId={selectedWorkspaceProjectId}
-          />
-        )}
-
-        {currentTab === 'exam-predictor' && (
-          <ExamPredictorPage
-            papers={papers}
-            onSelectPaper={handleSelectPaper}
-            onDownloadPaper={handleDownloadPaper}
-            onNavigateToWorkspace={() => {
-              setCurrentTab('workspace');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
           />
         )}
       </main>
@@ -439,13 +420,12 @@ function MainApp() {
             <span className="text-[11px] text-[#A7B4C8] font-normal">Personal Study Workspace & PYQ Library</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[#A7B4C8]">
-            <button onClick={() => setCurrentTab('home')} className="hover:text-white transition-colors">Home</button>
-            <button onClick={() => setCurrentTab('workspace')} className="hover:text-cyan-400 font-semibold transition-colors">Study Workspace</button>
-            <button onClick={() => setCurrentTab('exam-predictor')} className="hover:text-emerald-400 font-semibold transition-colors">Exam Predictor</button>
-            <button onClick={() => setCurrentTab('browse')} className="hover:text-white transition-colors">Explore PYQs</button>
-            <button onClick={() => setCurrentTab('about')} className="hover:text-white transition-colors">About</button>
-            <button onClick={() => setCurrentTab('upload')} className="hover:text-white transition-colors">Upload</button>
-            <button onClick={() => setCurrentTab('login')} className="hover:text-cyan-400 transition-colors">Sign In</button>
+            <button onClick={() => setCurrentTab('home')} className="hover:text-white transition-colors cursor-pointer">Home</button>
+            <button onClick={() => setCurrentTab('workspace')} className="hover:text-cyan-400 font-semibold transition-colors cursor-pointer">Study Workspace</button>
+            <button onClick={() => setCurrentTab('browse')} className="hover:text-white transition-colors cursor-pointer">Explore PYQs</button>
+            <button onClick={() => setCurrentTab('about')} className="hover:text-white transition-colors cursor-pointer">About</button>
+            <button onClick={() => setCurrentTab('upload')} className="hover:text-white transition-colors cursor-pointer">Upload</button>
+            <button onClick={() => setCurrentTab('login')} className="hover:text-cyan-400 transition-colors cursor-pointer">Sign In</button>
           </div>
           <p className="text-[11px] text-[#A7B4C8]/60">100% Free Public Student Workspace</p>
         </div>

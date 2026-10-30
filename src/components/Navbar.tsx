@@ -317,31 +317,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`} />
           </button>
 
-          {/* Exam Paper Predictor */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('exam-predictor')}
-            className={`w-full text-left px-3.5 py-3 rounded-xl transition-all flex items-center justify-between group cursor-pointer ${
-              currentTab === 'exam-predictor'
-                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 font-semibold border border-emerald-400/30 shadow-md'
-                : 'text-[#A7B4C8] hover:text-[#F8FAFC] hover:bg-white/[0.05] border border-transparent'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-colors ${
-                currentTab === 'exam-predictor' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/[0.05] text-[#A7B4C8] group-hover:text-emerald-300'
-              }`}>
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">Exam Predictor</span>
-                <span className="text-[11px] text-[#A7B4C8]/70">Rule-based pattern analysis & mocks</span>
-              </div>
-            </div>
-            <ChevronRight className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
-              currentTab === 'exam-predictor' ? 'text-emerald-400' : 'text-white/20'
-            }`} />
-          </button>
 
           <div className="pt-2 px-3 py-1 text-[10px] font-mono tracking-wider uppercase text-[#A7B4C8]/60 font-semibold">
             Public Library

@@ -12,166 +12,31 @@ import {
 import { supabase } from '../supabaseClient.js';
 import { supabaseDb } from './supabaseDb';
 
-const PROJECTS_STORAGE_KEY = 'studify_workspace_projects_v2';
-const QUICK_CAPTURES_KEY = 'studify_quick_captures_v2';
-const SESSION_STORAGE_KEY = 'studify_workspace_session_v2';
+const PROJECTS_STORAGE_KEY = 'studify_workspace_projects_clean_v3';
+const QUICK_CAPTURES_KEY = 'studify_quick_captures_clean_v3';
+const SESSION_STORAGE_KEY = 'studify_workspace_session_clean_v3';
+const LEGACY_WORKSPACE_PURGED = 'studify_workspace_test_purged_v3';
 
-const INITIAL_PROJECTS: StudyProject[] = [
-  {
-    id: 'proj-phys-12',
-    title: 'Class 12 Physics Board Revision',
-    subject: 'Physics',
-    examBoard: 'CBSE',
-    targetExam: 'CBSE Board Examination',
-    targetDate: '2025-03-04',
-    color: 'cyan',
-    icon: 'Atom',
-    description: 'Comprehensive preparation for Optics, Electromagnetism, and Modern Physics with PYQ practice.',
-    status: 'active',
-    createdAt: '2024-11-01T08:00:00.000Z',
-    updatedAt: new Date().toISOString(),
-    paperIds: ['pyq-cbse-12-phy-2024', 'pyq-cbse-10-sci-2024'],
-    tasks: [
-      { id: 't1', title: 'Derive Lens Maker Formula and practice ray diagrams', completed: true, priority: 'high' },
-      { id: 't2', title: 'Solve 5-year numericals on Photoelectric Effect', completed: false, priority: 'high', dueDate: 'Tomorrow' },
-      { id: 't3', title: 'Revise Biot-Savart Law and Ampere circuital law', completed: false, priority: 'medium' },
-      { id: 't4', title: 'Complete full mock test from 2024 paper under 3 hours', completed: false, priority: 'high' },
-    ],
-    notes: [
-      {
-        id: 'n1',
-        title: 'Wave Optics Key Formulae & Sign Conventions',
-        content: `• Fringe width: $\\beta = \\frac{\\lambda D}{d}$\n• Angular fringe width: $\\theta = \\frac{\\lambda}{d}$\n• Condition for constructive interference: $\\Delta x = n\\lambda$\n• Condition for destructive interference: $\\Delta x = (2n-1)\\frac{\\lambda}{2}$\n• Resolving power increases with decreasing wavelength (use blue light for higher resolution).`,
-        tags: ['Optics', 'Formulae', 'High-Yield'],
-        updatedAt: '2024-11-10T12:00:00.000Z',
-        isPinned: true,
-      },
-      {
-        id: 'n2',
-        title: 'Common Traps in Kirchhoff Rules',
-        content: `1. Always assign loop direction clockwise before setting up equations to avoid sign flip errors.\n2. In a battery, going from negative terminal to positive is +E, and vice-versa is -E.\n3. Verify junction rule (current entering = current leaving) at all non-trivial junctions before solving determinants.`,
-        tags: ['Current Electricity', 'Mistake Notebook'],
-        updatedAt: '2024-11-12T15:30:00.000Z',
-      }
-    ],
-    resources: [
-      {
-        id: 'r1',
-        title: 'NCERT Physics Part 2 PDF Official',
-        url: 'https://ncert.nic.in/textbook.php',
-        type: 'book',
-        notes: 'Chapter 9 and 10 have the highest mark-weightage (14 marks combined).'
-      },
-      {
-        id: 'r2',
-        title: 'Wave Optics 1-Shot Revision Lecture',
-        url: 'https://www.youtube.com',
-        type: 'video',
-        notes: 'Watch at 1.5x speed for quick derivation recap.'
-      }
-    ]
-  },
-  {
-    id: 'proj-chem-org',
-    title: 'Organic Chemistry Reactions & Mechanisms',
-    subject: 'Chemistry',
-    examBoard: 'CBSE',
-    targetExam: 'CBSE Class 12 / JEE',
-    targetDate: '2025-03-12',
-    color: 'emerald',
-    icon: 'FlaskConical',
-    description: 'Reaction roadmaps, named reactions, and conversion problems from Haloalkanes to Amines.',
-    status: 'active',
-    createdAt: '2024-11-05T09:00:00.000Z',
-    updatedAt: new Date().toISOString(),
-    paperIds: ['pyq-cbse-12-chem-2024'],
-    tasks: [
-      { id: 'ct1', title: 'Master Aldol Condensation & Cannizzaro mechanism', completed: true, priority: 'high' },
-      { id: 'ct2', title: 'Write down all 32 Named Reactions in cheat sheet', completed: false, priority: 'medium' },
-      { id: 'ct3', title: 'Practice 20 conversion questions from past 5 years', completed: false, priority: 'high' }
-    ],
-    notes: [
-      {
-        id: 'cn1',
-        title: 'Distinction Tests Quick Reference',
-        content: `• Lucas Test: 3° alcohol gives turbidity immediately, 2° in 5 mins, 1° only on heating.\n• Iodoform Test: Gives yellow ppt with $CH_3-C=O$ or $CH_3-CH(OH)-$ groups.\n• Tollens Test: Silver mirror test positive for aldehydes (both aliphatic & aromatic).\n• Fehling Test: Red ppt for aliphatic aldehydes only (benzaldehyde does NOT react).`,
-        tags: ['Practical Chem', 'Distinction Tests'],
-        updatedAt: '2024-11-14T10:00:00.000Z',
-        isPinned: true
-      }
-    ],
-    resources: [
-      {
-        id: 'cr1',
-        title: 'NCERT Exemplar Organic Conversions',
-        url: 'https://ncert.nic.in/exemplar-problems.php',
-        type: 'doc',
-        notes: 'High probability of 3-mark direct conversion questions.'
-      }
-    ]
-  },
-  {
-    id: 'proj-jee-math',
-    title: 'JEE Main Calculus & Coordinate Geometry',
-    subject: 'Mathematics',
-    examBoard: 'JEE Main',
-    targetExam: 'JEE Main 2025 Session 1',
-    targetDate: '2025-01-24',
-    color: 'amber',
-    icon: 'Calculator',
-    description: 'Targeting 60+ marks in JEE Mathematics focusing on Definite Integrals, Differential Equations, and Vectors.',
-    status: 'active',
-    createdAt: '2024-10-20T11:00:00.000Z',
-    updatedAt: new Date().toISOString(),
-    paperIds: ['pyq-jee-main-2024-session1'],
-    tasks: [
-      { id: 'mt1', title: 'Solve 30 questions on Newton-Leibniz formula', completed: true, priority: 'high' },
-      { id: 'mt2', title: 'Revise 3D Lines & Shortest Distance formulas', completed: false, priority: 'high' },
-      { id: 'mt3', title: 'Attempt 2024 January Session 1 Math section timed', completed: false, priority: 'high' }
-    ],
-    notes: [
-      {
-        id: 'mn1',
-        title: 'Definite Integrals - King and Queen Properties',
-        content: `• Property IV (King Rule): $\\int_a^b f(x) dx = \\int_a^b f(a+b-x) dx$\n• Queen Rule: $\\int_0^{2a} f(x) dx = 2\\int_0^a f(x) dx$ if $f(2a-x) = f(x)$\n• Leibniz Integral Rule for derivative under integral sign.`,
-        tags: ['Calculus', 'JEE Shortcuts'],
-        updatedAt: '2024-11-08T18:00:00.000Z',
-        isPinned: true
-      }
-    ],
-    resources: []
+function purgeLegacyWorkspaceData() {
+  try {
+    if (!localStorage.getItem(LEGACY_WORKSPACE_PURGED)) {
+      localStorage.removeItem('studify_workspace_projects_v2');
+      localStorage.removeItem('studify_quick_captures_v2');
+      localStorage.removeItem('studify_workspace_session_v2');
+      localStorage.removeItem(PROJECTS_STORAGE_KEY);
+      localStorage.removeItem(QUICK_CAPTURES_KEY);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      localStorage.setItem(LEGACY_WORKSPACE_PURGED, 'true');
+    }
+  } catch (e) {
+    // ignore
   }
-];
+}
 
-const INITIAL_CAPTURES: QuickCaptureItem[] = [
-  {
-    id: 'qc-1',
-    title: 'Photoelectric work function relation',
-    content: 'Remember: $K_{max} = h\\nu - \\Phi_0$. Slope of $K_{max}$ vs $\\nu$ graph is always Planck constant $h$, independent of metal!',
-    type: 'formula',
-    projectId: 'proj-phys-12',
-    tags: ['Physics', 'Modern Physics', 'Viva'],
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
-  },
-  {
-    id: 'qc-2',
-    title: 'Check NCERT table 8.1 for EM Spectrum wavelengths',
-    content: 'CBSE frequently asks 1-mark identification questions based on wavelength ranges (e.g., $10^{-10}$ m for X-rays).',
-    type: 'doubt',
-    projectId: 'proj-phys-12',
-    tags: ['CBSE 12', 'EM Waves'],
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
-  },
-  {
-    id: 'qc-3',
-    title: 'Good online calculator for definite integrals step-by-step',
-    content: 'Useful to verify area under curve problems: symbolab.com/solver/definite-integral-calculator',
-    type: 'resource',
-    projectId: 'proj-jee-math',
-    tags: ['Tool', 'Calculus'],
-    createdAt: new Date(Date.now() - 3600000 * 48).toISOString()
-  }
-];
+purgeLegacyWorkspaceData();
+
+const INITIAL_PROJECTS: StudyProject[] = [];
+const INITIAL_CAPTURES: QuickCaptureItem[] = [];
 
 export const workspaceService = {
   // -------------------------------------------------------------

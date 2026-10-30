@@ -33,7 +33,6 @@ interface WorkspacePageProps {
   onSelectPaper: (paper: Paper) => void;
   onDownloadPaper: (paper: Paper, e?: React.MouseEvent) => void;
   onNavigateToBrowse: () => void;
-  onNavigateToPredictor: () => void;
   initialProjectId?: string;
 }
 
@@ -42,7 +41,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   onSelectPaper,
   onDownloadPaper,
   onNavigateToBrowse,
-  onNavigateToPredictor,
   initialProjectId
 }) => {
   const { currentUser, isAuthenticated } = useAuth();
@@ -276,13 +274,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <span>Quick Capture</span>
           </button>
 
-          <button
-            onClick={onNavigateToPredictor}
-            className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Exam Predictor</span>
-          </button>
 
           <button
             onClick={() => setIsNewProjectModalOpen(true)}
