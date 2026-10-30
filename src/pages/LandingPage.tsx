@@ -1,7 +1,6 @@
 import React from 'react';
 import { Search, BookOpen, Bookmark, UploadCloud, ArrowRight, Star, ShieldCheck, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
 import { Paper } from '../types';
-import { MadeInIndiaBadge } from '../components/MadeInIndiaBadge';
 
 interface LandingPageProps {
   onNavigateToSearch: () => void;
@@ -27,11 +26,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           {/* Left Column: Core Message */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-            {/* PRIMARY FOCUS: MADE IN INDIA & CREATOR BADGE */}
-            <div className="flex justify-center lg:justify-start">
-              <MadeInIndiaBadge />
-            </div>
-
             {/* Introductory Label */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-cyan-300 text-xs font-semibold tracking-wider uppercase shadow-xs">
               <BookOpen className="w-3.5 h-3.5" />

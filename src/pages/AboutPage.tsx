@@ -78,18 +78,6 @@ export const AboutPage: React.FC<AboutPageProps> = ({
         >
           {/* Centered Typography: Exactly Headline & Supporting Text */}
           <div className="space-y-4 max-w-xl mx-auto">
-            {/* PROMINENT MADE IN INDIA ATTRIBUTION */}
-            <div className="inline-flex flex-wrap items-center justify-center gap-2.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl bg-gradient-to-r from-orange-500/15 via-white/[0.08] to-emerald-500/15 border-2 border-orange-500/40 shadow-xl backdrop-blur-xl">
-              <span className="text-xl sm:text-2xl" role="img" aria-label="Indian Flag">🇮🇳</span>
-              <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-orange-400">
-                MADE IN INDIA
-              </span>
-              <span className="hidden sm:inline text-white/30 font-bold">•</span>
-              <span className="text-xs sm:text-sm font-bold text-[#F8FAFC]">
-                Made by <strong className="font-extrabold text-cyan-300">Surajdeep</strong>, <strong className="font-extrabold text-teal-300">Abhyuday</strong>, <strong className="font-extrabold text-emerald-300">Atharv</strong>, and <strong className="font-extrabold text-amber-300">Ishaan</strong>
-              </span>
-            </div>
-
             <div>
               <span className="text-[11px] font-mono tracking-widest uppercase text-[#787D8A]">
                 SCENE I
@@ -210,58 +198,6 @@ export const AboutPage: React.FC<AboutPageProps> = ({
               scrollProgress={scrollProgress} 
               isReducedMotion={isReducedMotion} 
             />
-          </div>
-
-          {/* Dedicated Creators & Attribution Section */}
-          <div className="w-full max-w-2xl mx-auto p-6 sm:p-8 rounded-3xl bg-[#0F172A]/90 border border-white/[0.14] shadow-2xl space-y-6 text-center backdrop-blur-xl">
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500/15 via-white/[0.08] to-emerald-500/15 border border-orange-500/30 text-xs font-bold uppercase tracking-wider text-orange-300">
-              <span role="img" aria-label="India flag">🇮🇳</span>
-              <span>Made in India</span>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-xl sm:text-2xl font-black text-[#F8FAFC] tracking-tight">
-                Project Creators & Development Team
-              </h3>
-              <p className="text-xs sm:text-sm text-[#A7B4C8] leading-relaxed max-w-lg mx-auto">
-                Studify was created by <strong>Surajdeep</strong>, <strong>Abhyuday</strong>, <strong>Atharv</strong>, and <strong>Ishaan</strong> as a free, open-access academic workspace for previous-year examination papers, solutions, and preparation resources.
-              </p>
-            </div>
-
-            {/* Clean Grid of the 4 Creators */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <div className="p-3.5 rounded-2xl bg-[#0A1222] border border-cyan-500/30 text-center hover:border-cyan-400 transition-colors">
-                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-cyan-500/15 text-cyan-300 font-black text-sm flex items-center justify-center">
-                  S
-                </div>
-                <div className="font-bold text-sm text-[#F8FAFC]">Surajdeep</div>
-                <div className="text-[11px] text-[#A7B4C8] mt-0.5">Creator</div>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#0A1222] border border-teal-500/30 text-center hover:border-teal-400 transition-colors">
-                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-teal-500/15 text-teal-300 font-black text-sm flex items-center justify-center">
-                  A
-                </div>
-                <div className="font-bold text-sm text-[#F8FAFC]">Abhyuday</div>
-                <div className="text-[11px] text-[#A7B4C8] mt-0.5">Creator</div>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#0A1222] border border-emerald-500/30 text-center hover:border-emerald-400 transition-colors">
-                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-emerald-500/15 text-emerald-300 font-black text-sm flex items-center justify-center">
-                  A
-                </div>
-                <div className="font-bold text-sm text-[#F8FAFC]">Atharv</div>
-                <div className="text-[11px] text-[#A7B4C8] mt-0.5">Creator</div>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#0A1222] border border-amber-500/30 text-center hover:border-amber-400 transition-colors">
-                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-amber-500/15 text-amber-300 font-black text-sm flex items-center justify-center">
-                  I
-                </div>
-                <div className="font-bold text-sm text-[#F8FAFC]">Ishaan</div>
-                <div className="text-[11px] text-[#A7B4C8] mt-0.5">Creator</div>
-              </div>
-            </div>
           </div>
 
           {/* One Restrained Call to Action Button */}
