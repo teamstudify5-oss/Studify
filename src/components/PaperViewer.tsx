@@ -17,6 +17,12 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({ paper, onDownload }) =
   useEffect(() => {
     let isCurrent = true;
     if (paper.fileUrl) {
+      if (paper.fileUrl.startsWith('http://') || paper.fileUrl.startsWith('https://') || paper.fileUrl.startsWith('blob:')) {
+        setSignedUrl(paper.fileUrl);
+        setLoadingSignedUrl(false);
+        return;
+      }
+
       setLoadingSignedUrl(true);
       supabaseStorage.getSignedFileUrl(paper.fileUrl)
         .then((url) => {

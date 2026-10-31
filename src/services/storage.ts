@@ -2,6 +2,7 @@ import { Paper, PaperStatus, PaperReview, PaperComment } from '../types';
 import { SAMPLE_PAPERS } from '../data/samplePapers';
 import { supabaseDb } from './supabaseDb';
 import { supabaseStorage } from './supabaseStorage';
+import { communityPyqService } from './communityPyqService';
 
 const PAPERS_STORAGE_KEY = 'pyq_papers_clean_v3';
 const SAVED_PAPERS_STORAGE_KEY = 'pyq_saved_paper_ids_clean_v3';
@@ -27,17 +28,17 @@ function purgeLegacyTestPapers() {
 purgeLegacyTestPapers();
 
 export const storageService = {
-  // Sync papers from Supabase
+  // Sync papers from Supabase Community PYQ Library
   async fetchPapersFromSupabase(): Promise<Paper[]> {
     try {
-      const remote = await supabaseDb.loadPapers();
-      if (remote && remote.length > 0) {
-        this.savePapers(remote);
-        return remote;
+      const communityPapers = await communityPyqService.fetchCommunityPyqs();
+      if (communityPapers && communityPapers.length > 0) {
+        this.savePapers(communityPapers);
+        return communityPapers;
       }
       return this.getPapers();
     } catch (e) {
-      console.warn('Could not fetch papers from Supabase:', e);
+      console.warn('Could not fetch papers from Supabase community_pyqs:', e);
       return this.getPapers();
     }
   },
@@ -135,13 +136,10 @@ export const storageService = {
     if (filtered.length === papers.length) return false;
     this.savePapers(filtered);
 
-    // Remove file from Supabase Storage bucket 'app-files'
-    if (paperToDelete?.fileUrl) {
-      supabaseStorage.deleteAppFile(paperToDelete.fileUrl).catch((e) => console.warn('Supabase deleteAppFile failed', e));
-    }
-
-    // Real Supabase delete query
-    supabaseDb.deletePaper(id).catch((e) => console.warn('Supabase deletePaper failed', e));
+    // Delete from community_pyqs table and community-pyqs bucket
+    communityPyqService.deleteCommunityPyq(id, paperToDelete?.filePath || paperToDelete?.fileUrl).catch((e) => {
+      console.warn('Community paper deletion error:', e);
+    });
 
     return true;
   },
@@ -152,8 +150,9 @@ export const storageService = {
     if (p) {
       p.viewsCount = (p.viewsCount || 0) + 1;
       this.savePapers(papers);
-      supabaseDb.updatePaper(id, { viewsCount: p.viewsCount }).catch(() => {});
     }
+    // Hardened RPC increment
+    communityPyqService.incrementView(id);
   },
 
   recordDownload(id: string): void {
@@ -162,8 +161,9 @@ export const storageService = {
     if (p) {
       p.downloadsCount = (p.downloadsCount || 0) + 1;
       this.savePapers(papers);
-      supabaseDb.updatePaper(id, { downloadsCount: p.downloadsCount }).catch(() => {});
     }
+    // Hardened RPC increment
+    communityPyqService.incrementDownload(id);
   },
 
   // Saved bookmarks

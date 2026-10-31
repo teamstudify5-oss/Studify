@@ -30,13 +30,13 @@ export interface ProjectResource {
 export interface StudyProject {
   id: string;
   title: string;
-  subject: string;
+  subject?: string;
   examBoard?: ExamBoard | string;
   targetExam?: string;
   targetDate?: string;
   color: 'cyan' | 'emerald' | 'amber' | 'violet' | 'rose' | 'sky';
   icon?: string;
-  description: string;
+  description?: string;
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;

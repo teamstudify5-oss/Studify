@@ -71,6 +71,8 @@ export interface Paper {
   fileName: string;
   fileSizeBytes: number;
   fileUrl?: string;
+  filePath?: string;
+  uploaderDisplayName?: string;
   sections: PaperSection[];
   tags: string[];
   rating?: number;

@@ -20,7 +20,7 @@ export const AddToProjectModal: React.FC<AddToProjectModalProps> = ({
   const [projects, setProjects] = useState<StudyProject[]>(workspaceService.getProjects());
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
-  const [newProjectSubject, setNewProjectSubject] = useState(paper?.subject || 'General');
+  const [newProjectSubject, setNewProjectSubject] = useState(paper?.subject || '');
 
   if (!isOpen || !paper) return null;
 
@@ -36,9 +36,9 @@ export const AddToProjectModal: React.FC<AddToProjectModalProps> = ({
 
     const created = workspaceService.createProject({
       title: newProjectTitle.trim(),
-      subject: newProjectSubject || paper.subject,
-      examBoard: paper.examBoard,
-      description: `Project created for ${paper.title} and related preparation.`,
+      subject: newProjectSubject.trim() || undefined,
+      examBoard: paper.examBoard || undefined,
+      description: `Project for ${paper.title}`,
       color: 'cyan',
       paperIds: [paper.id]
     });
@@ -102,7 +102,7 @@ export const AddToProjectModal: React.FC<AddToProjectModalProps> = ({
                             {proj.title}
                           </div>
                           <div className="text-[10px] text-[#A7B4C8]">
-                            {proj.subject} · {proj.paperIds.length} attached papers
+                            {proj.subject ? `${proj.subject} · ` : ''}{proj.paperIds.length} attached papers
                           </div>
                         </div>
                       </div>
@@ -134,9 +134,9 @@ export const AddToProjectModal: React.FC<AddToProjectModalProps> = ({
             </>
           ) : (
             <form onSubmit={handleCreateAndAdd} className="space-y-3.5">
-              <div className="text-xs font-semibold text-white">Create New Study Project</div>
+              <div className="text-xs font-semibold text-white">Create New Project</div>
               <div>
-                <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Project Title</label>
+                <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Project Title *</label>
                 <input
                   type="text"
                   required
@@ -148,10 +148,10 @@ export const AddToProjectModal: React.FC<AddToProjectModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Subject</label>
+                <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Subject (Optional)</label>
                 <input
                   type="text"
-                  required
+                  placeholder="e.g. Physics (Optional)"
                   value={newProjectSubject}
                   onChange={(e) => setNewProjectSubject(e.target.value)}
                   className="w-full px-3 py-2 bg-[#101B2D] border border-white/[0.14] rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-cyan-400"

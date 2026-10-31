@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   Sparkles,
   Award,
-  Flag
+  Flag,
+  Edit2
 } from 'lucide-react';
 import { Paper } from '../types';
 import { PaperRemovalRequest } from '../types/removal';
@@ -28,6 +29,7 @@ import { storageService } from '../services/storage';
 import { removalService } from '../services/removalService';
 import { PaperCard } from '../components/PaperCard';
 import { supabase } from '../supabaseClient.js';
+import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
 
 interface ProfilePageProps {
   papers: Paper[];
@@ -58,6 +60,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 }) => {
   const { currentUser, isAuthenticated, logout, openAuthModal } = useAuth();
   const [activeSection, setActiveSection] = useState<ProfileSection>(initialSection);
+  const [editingUpload, setEditingUpload] = useState<Paper | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -604,6 +607,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                           )}
 
                           <button
+                            onClick={() => setEditingUpload(paper)}
+                            className="px-3 py-1.5 text-xs font-semibold text-white bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.1] rounded-xl transition-colors flex items-center gap-1"
+                            title="Edit paper"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Edit</span>
+                          </button>
+
+                          <button
                             onClick={() => handleDeleteUpload(paper.id)}
                             className="p-1.5 text-[#A7B4C8] hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
                             title="Delete upload"
@@ -957,6 +969,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           )}
         </div>
       </div>
+
+      {editingUpload && (
+        <EditCommunityPyqModal
+          paper={editingUpload}
+          isOpen={Boolean(editingUpload)}
+          onClose={() => setEditingUpload(null)}
+          onUpdated={(updated) => {
+            setEditingUpload(null);
+            const all = storageService.getPapers();
+            storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
+          }}
+        />
+      )}
     </div>
   );
 };

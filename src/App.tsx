@@ -156,9 +156,23 @@ function MainApp() {
     storageService.recordDownload(paper.id);
     setPapers(storageService.getPapers());
 
-    // If paper has a fileUrl in Supabase Storage, retrieve private signed URL and download
+    // If paper has a public or storage fileUrl, download it directly
     if (paper.fileUrl) {
       try {
+        // Direct public community-pyqs URL
+        if (paper.fileUrl.startsWith('http://') || paper.fileUrl.startsWith('https://')) {
+          const a = document.createElement('a');
+          a.href = paper.fileUrl;
+          a.download = paper.fileName || `${paper.subject}_${paper.year}.pdf`;
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast('Download started');
+          return;
+        }
+
+        // Private storage path fallback (e.g. app-files bucket)
         const signedUrl = await supabaseStorage.getSignedFileUrl(paper.fileUrl);
         if (signedUrl) {
           const a = document.createElement('a');
@@ -354,6 +368,10 @@ function MainApp() {
               onPaperSubmitted={handlePaperSubmitted}
               onNavigateToSubmissions={() => {
                 setCurrentTab('profile');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onNavigateToBrowse={() => {
+                setCurrentTab('browse');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               onRedirectToLogin={() => setCurrentTab('login')}

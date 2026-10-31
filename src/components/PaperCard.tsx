@@ -63,6 +63,18 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           {paper.title}
         </h3>
 
+        {/* Chapter badge and uploader attribution */}
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[#A7B4C8]">
+          {paper.chapter && (
+            <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-300 border border-teal-400/20 font-medium">
+              {paper.chapter}
+            </span>
+          )}
+          <span className="text-[#A7B4C8]">
+            Uploaded by <strong className="text-white/90 font-medium">{paper.uploaderDisplayName || paper.submittedBy?.name || 'Community'}</strong>
+          </span>
+        </div>
+
         {/* Subject & Description */}
         <p className="text-xs text-[#A7B4C8] line-clamp-2 leading-relaxed">
           {paper.description || `${paper.subject} previous year question paper with marking scheme.`}

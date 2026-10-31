@@ -4,14 +4,16 @@ import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storage';
 import { removalService } from '../services/removalService';
 import { PaperRemovalRequest } from '../types/removal';
-import { FolderClosed, PlusCircle, Trash2, Eye, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { FolderClosed, PlusCircle, Trash2, Eye, ShieldAlert, CheckCircle2, Edit2 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
+import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
 
 interface SubmissionsPageProps {
   papers: Paper[];
   onSelectPaper: (paper: Paper) => void;
   onNavigateToUpload: () => void;
   onPaperDeleted: (id: string) => void;
+  onPaperUpdated?: (updated: Paper) => void;
   onRedirectToLogin?: () => void;
 }
 
@@ -20,9 +22,11 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
   onSelectPaper,
   onNavigateToUpload,
   onPaperDeleted,
+  onPaperUpdated,
   onRedirectToLogin,
 }) => {
   const { currentUser, isAuthenticated, openAuthModal } = useAuth();
+  const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -154,19 +158,26 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-                  {paper.status === 'approved' && (
-                    <button
-                      onClick={() => onSelectPaper(paper)}
-                      className="px-3 py-1.5 text-xs font-medium text-[#F5F5F5] bg-[#1D1D1D] hover:bg-[#252525] border border-white/[0.09] rounded-xl transition-colors flex items-center gap-1"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>View paper</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => onSelectPaper(paper)}
+                    className="px-3 py-1.5 text-xs font-medium text-[#F5F5F5] bg-[#1D1D1D] hover:bg-[#252525] border border-white/[0.09] rounded-xl transition-colors flex items-center gap-1"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>View</span>
+                  </button>
+
+                  <button
+                    onClick={() => setEditingPaper(paper)}
+                    className="px-3 py-1.5 text-xs font-medium text-[#F5F5F5] bg-[#1D1D1D] hover:bg-[#252525] border border-white/[0.09] rounded-xl transition-colors flex items-center gap-1"
+                    title="Edit submission"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Edit</span>
+                  </button>
 
                   <button
                     onClick={() => handleDelete(paper.id)}
-                    className="p-1.5 text-[#707070] hover:text-[#F5F5F5] hover:bg-[#252525] rounded-lg transition-colors"
+                    className="p-1.5 text-[#707070] hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
                     title="Delete submission"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -226,6 +237,20 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
             Upload paper
           </button>
         </div>
+      )}
+
+      {editingPaper && (
+        <EditCommunityPyqModal
+          paper={editingPaper}
+          isOpen={Boolean(editingPaper)}
+          onClose={() => setEditingPaper(null)}
+          onUpdated={(updated) => {
+            setEditingPaper(null);
+            const all = storageService.getPapers();
+            storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
+            if (onPaperUpdated) onPaperUpdated(updated);
+          }}
+        />
       )}
     </div>
   );

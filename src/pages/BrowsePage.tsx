@@ -44,7 +44,8 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
           const matchGrade = paper.grade.toLowerCase().includes(q);
           const matchYear = paper.year.toString().includes(q);
           const matchChapter = paper.chapter ? paper.chapter.toLowerCase().includes(q) : false;
-          if (!matchTitle && !matchSubject && !matchBoard && !matchGrade && !matchYear && !matchChapter) {
+          const matchUploader = (paper.uploaderDisplayName || paper.submittedBy?.name || '').toLowerCase().includes(q);
+          if (!matchTitle && !matchSubject && !matchBoard && !matchGrade && !matchYear && !matchChapter && !matchUploader) {
             return false;
           }
         }

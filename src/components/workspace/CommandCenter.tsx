@@ -89,8 +89,8 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     .filter(
       (proj) =>
         proj.title.toLowerCase().includes(normalizedQuery) ||
-        proj.subject.toLowerCase().includes(normalizedQuery) ||
-        proj.description.toLowerCase().includes(normalizedQuery)
+        (proj.subject && proj.subject.toLowerCase().includes(normalizedQuery)) ||
+        (proj.description && proj.description.toLowerCase().includes(normalizedQuery))
     )
     .slice(0, 3);
 
@@ -170,7 +170,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                         {proj.title}
                       </div>
                       <div className="text-[11px] text-[#A7B4C8] truncate">
-                        {proj.subject} · {proj.paperIds.length} attached papers · {proj.tasks.filter((t) => t.completed).length}/{proj.tasks.length} tasks
+                        {proj.subject ? `${proj.subject} · ` : ''}{proj.paperIds.length} attached papers · {proj.tasks.filter((t) => t.completed).length}/{proj.tasks.length} tasks
                       </div>
                     </div>
                   </div>

@@ -10,12 +10,14 @@ import { supabaseStorage } from '../services/supabaseStorage';
 interface UploadPageProps {
   onPaperSubmitted: (newPaper: Paper) => void;
   onNavigateToSubmissions: () => void;
+  onNavigateToBrowse?: () => void;
   onRedirectToLogin?: () => void;
 }
 
 export const UploadPage: React.FC<UploadPageProps> = ({
   onPaperSubmitted,
   onNavigateToSubmissions,
+  onNavigateToBrowse,
   onRedirectToLogin,
 }) => {
   const { currentUser, isAuthenticated, openAuthModal } = useAuth();
@@ -82,8 +84,8 @@ export const UploadPage: React.FC<UploadPageProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 20 * 1024 * 1024) {
-        setErrorMessage('This file cannot be uploaded. File is larger than 20MB.');
+      if (file.size > 50 * 1024 * 1024) {
+        setErrorMessage('This file cannot be uploaded. File is larger than 50MB.');
         return;
       }
       setSelectedFile({
@@ -118,7 +120,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
       return;
     }
 
-    if (!selectedFile) {
+    if (!selectedFile || !actualFile) {
       setErrorMessage('Please select a PDF or image file.');
       return;
     }
@@ -127,55 +129,38 @@ export const UploadPage: React.FC<UploadPageProps> = ({
     setIsSubmitting(true);
 
     try {
-      const newPaperId = `pyq-user-${Date.now()}`;
-      let uploadedFilePath: string | undefined = undefined;
+      // Import communityPyqService dynamically or via top-level import
+      const { communityPyqService } = await import('../services/communityPyqService');
 
-      // Upload file to Supabase Storage bucket 'app-files'
-      // Path format: ${auth.uid()}/papers/${itemId}/${uuid}.${extension}
-      if (actualFile && currentUser?.id) {
-        const uploadRes = await supabaseStorage.uploadAppFile({
-          userId: currentUser.id,
-          featureName: 'papers',
-          itemId: newPaperId,
-          file: actualFile,
-          fileName: selectedFile.name,
-          contentType: selectedFile.type,
-        });
-
-        if (uploadRes.error) {
-          console.warn('Supabase storage upload notice:', uploadRes.error.message);
-        } else if (uploadRes.path) {
-          uploadedFilePath = uploadRes.path;
-        }
-      }
-
-      // Save paper metadata and returned storage file path in database
-      const submitted = storageService.submitPaper({
-        id: newPaperId,
+      const { paper: newPaper, error: uploadErr } = await communityPyqService.uploadCommunityPyq({
+        file: actualFile,
+        fileName: selectedFile.name,
         title: title.trim(),
-        grade,
         subject: resolvedSubject,
+        grade,
         examBoard,
         year: Number(year),
         chapter: chapter.trim() || undefined,
-        totalMarks: 70,
-        timeAllowedMinutes: 180,
         description: description.trim() || '',
-        submittedBy: {
-          id: currentUser!.id,
-          name: currentUser!.name,
-          email: currentUser!.email,
-        },
-        fileName: selectedFile.name,
-        fileSizeBytes: selectedFile.size,
-        fileUrl: uploadedFilePath,
+        totalMarks: 100,
+        timeAllowedMinutes: 180,
         tags: [examBoard, grade, resolvedSubject, `${year}`],
-        sections: [],
+        uploaderDisplayName: currentUser?.name || 'Community Contributor',
       });
+
+      if (uploadErr || !newPaper) {
+        setIsSubmitting(false);
+        setErrorMessage(uploadErr?.message || 'Failed to upload community paper. Please try again.');
+        return;
+      }
+
+      // Add to local state/cache so it appears immediately everywhere
+      const existing = storageService.getPapers();
+      storageService.savePapers([newPaper, ...existing.filter((p) => p.id !== newPaper.id)]);
 
       setIsSubmitting(false);
       setSubmissionSuccess(true);
-      onPaperSubmitted(submitted);
+      onPaperSubmitted(newPaper);
     } catch (err: any) {
       setIsSubmitting(false);
       setErrorMessage(err?.message || 'Something went wrong. Try again.');
@@ -189,15 +174,23 @@ export const UploadPage: React.FC<UploadPageProps> = ({
           <CheckCircle2 className="w-7 h-7" />
         </div>
         <h1 className="text-2xl font-bold text-[#F8FAFC]">
-          Paper submitted for review
+          Paper published to Community Library!
         </h1>
         <p className="text-xs sm:text-sm text-[#A7B4C8] leading-relaxed max-w-sm mx-auto">
-          Thank you for contributing! The site administrator reviews all question papers before they appear publicly.
+          Your question paper is now live and can be browsed and downloaded immediately by all students and visitors.
         </p>
         <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+          {onNavigateToBrowse && (
+            <button
+              onClick={onNavigateToBrowse}
+              className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/20"
+            >
+              Browse Library
+            </button>
+          )}
           <button
             onClick={onNavigateToSubmissions}
-            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/20"
+            className="px-5 py-2.5 bg-[#101B2D] hover:bg-[#15233D] border border-white/[0.12] text-[#F8FAFC] text-xs font-medium rounded-xl transition-all"
           >
             My Materials
           </button>
@@ -210,7 +203,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               setDescription('');
               setChapter('');
             }}
-            className="px-5 py-2.5 bg-[#101B2D] hover:bg-[#15233D] border border-white/[0.12] text-[#F8FAFC] text-xs font-medium rounded-xl transition-all"
+            className="px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-[#A7B4C8] hover:text-white text-xs font-medium rounded-xl transition-all"
           >
             Upload Another
           </button>

@@ -152,7 +152,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                 <option value="">(Inbox / General Scratchpad)</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.title} ({p.subject})
+                    {p.title}{p.subject ? ` (${p.subject})` : ''}
                   </option>
                 ))}
               </select>

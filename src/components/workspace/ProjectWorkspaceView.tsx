@@ -152,8 +152,8 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   // Export summary
   const handleExportSummary = () => {
     const text = 
-`STUDIFY STUDY PROJECT: ${currentProject.title}
-Subject: ${currentProject.subject} | Target: ${currentProject.targetExam || 'Examinations'}
+`STUDIFY PROJECT: ${currentProject.title}
+Subject: ${currentProject.subject || 'General'} | Target: ${currentProject.targetExam || 'Not specified'}
 Target Date: ${currentProject.targetDate || 'Not specified'}
 Tasks Completed: ${completedTasks}/${totalTasks} (${progressPercent}%)
 
@@ -218,9 +218,11 @@ Generated from Studify Student Workspace.
         <div className="relative z-10 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs">
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 font-semibold">
-                {currentProject.subject}
-              </span>
+              {currentProject.subject && (
+                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 font-semibold">
+                  {currentProject.subject}
+                </span>
+              )}
               {currentProject.examBoard && (
                 <span className="text-[#A7B4C8]">· {currentProject.examBoard}</span>
               )}
@@ -241,9 +243,11 @@ Generated from Studify Student Workspace.
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight">
               {currentProject.title}
             </h1>
-            <p className="text-xs sm:text-sm text-[#A7B4C8] mt-1.5 max-w-2xl leading-relaxed">
-              {currentProject.description}
-            </p>
+            {currentProject.description && (
+              <p className="text-xs sm:text-sm text-[#A7B4C8] mt-1.5 max-w-2xl leading-relaxed">
+                {currentProject.description}
+              </p>
+            )}
           </div>
 
           {/* Progress Bar */}

@@ -16,7 +16,9 @@ import {
   ArrowRight,
   FolderPlus,
   ShieldAlert,
-  Flag
+  Flag,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { Paper } from '../types';
 import { PaperViewer } from '../components/PaperViewer';
@@ -25,6 +27,8 @@ import { useAuth } from '../context/AuthContext';
 import { PaperCard } from '../components/PaperCard';
 import { AddToProjectModal } from '../components/workspace/AddToProjectModal';
 import { ReportRemovalModal } from '../components/ReportRemovalModal';
+import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
+import { communityPyqService } from '../services/communityPyqService';
 
 interface PaperDetailsPageProps {
   paper: Paper;
@@ -67,6 +71,21 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   // Report & Removal Request state
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportToast, setReportToast] = useState<string | null>(null);
+
+  // Edit submission state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const isUploader = Boolean(currentUser?.id && currentPaper.submittedBy?.id === currentUser.id);
+
+  const handleDeleteSubmission = async () => {
+    if (!window.confirm('Are you sure you want to delete this community submission? This cannot be undone.')) return;
+    try {
+      await communityPyqService.deleteCommunityPyq(currentPaper.id, currentPaper.filePath || currentPaper.fileUrl);
+      storageService.deletePaper(currentPaper.id);
+      onBack();
+    } catch (e) {
+      alert('Could not delete paper. Please try again.');
+    }
+  };
 
   useEffect(() => {
     storageService.recordView(paper.id);
@@ -140,6 +159,30 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         </button>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Uploader Edit & Delete Controls */}
+          {isUploader && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(true)}
+                className="px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-white transition-all flex items-center gap-1.5"
+                title="Edit this submission"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSubmission}
+                className="px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 transition-all flex items-center gap-1.5"
+                title="Delete your submission"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             onClick={() => setIsReportModalOpen(true)}
@@ -548,12 +591,18 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         </div>
       )}
 
-      {/* Project Toast */}
-      {projectToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#101B2D] text-[#F8FAFC] border border-white/[0.14] text-xs px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-in fade-in">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span>{projectToast}</span>
-        </div>
+      {/* Edit Community Submission Modal */}
+      {isUploader && (
+        <EditCommunityPyqModal
+          paper={currentPaper}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onUpdated={(updated) => {
+            setCurrentPaper(updated);
+            const all = storageService.getPapers();
+            storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
+          }}
+        />
       )}
     </div>
   );

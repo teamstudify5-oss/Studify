@@ -20,7 +20,9 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   const approvedPapers = papers.filter((p) => p.status === 'approved');
-  const recentPapers = approvedPapers.slice(0, 6);
+  const topPapers = [...approvedPapers]
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0) || b.downloadsCount - a.downloadsCount)
+    .slice(0, 6);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,11 +184,11 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
       </div>
 
-      {/* Recent Approved Papers Section */}
+      {/* Top Community Papers Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
           <h2 className="text-sm font-semibold text-[#F5F5F5]">
-            Recently added papers
+            Featured & top-rated papers
           </h2>
           <button
             onClick={() => onNavigateToBrowse()}
@@ -197,9 +199,9 @@ export const HomePage: React.FC<HomePageProps> = ({
           </button>
         </div>
 
-        {recentPapers.length > 0 ? (
+        {topPapers.length > 0 ? (
           <div className="space-y-2.5">
-            {recentPapers.map((paper) => (
+            {topPapers.map((paper) => (
               <PaperCard
                 key={paper.id}
                 paper={paper}
