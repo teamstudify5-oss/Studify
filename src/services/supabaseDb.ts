@@ -3,6 +3,34 @@ import { StudyProject, QuickCaptureItem } from '../types/workspace';
 import { Paper } from '../types';
 import { supabaseStorage } from './supabaseStorage';
 
+export interface DbReport {
+  id: string;
+  paper_id: string;
+  reporter_id?: string;
+  reporter_name?: string;
+  reporter_email?: string;
+  reason_category: string;
+  reason_details: string;
+  evidence_url?: string;
+  status: 'pending' | 'resolved' | 'dismissed' | 'taken_down';
+  moderator_notes?: string;
+  resolution_notes?: string;
+  created_at: string;
+}
+
+export interface DbModerationLog {
+  id: string;
+  moderator_id: string;
+  moderator_email?: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason?: string;
+  details?: any;
+  metadata?: any;
+  created_at: string;
+}
+
 /**
  * Supabase Database Service
  * Provides direct CRUD queries for User Projects, Quick Captures, Bookmarks, and Papers
@@ -517,6 +545,7 @@ export const supabaseDb = {
 
   /**
    * Insert or update a note in the "notes" table
+   * Bug 15 fix: Preserves original created_at timestamp when updating an existing note
    */
   async createNote(note: {
     id: string;
@@ -525,10 +554,26 @@ export const supabaseDb = {
     content: string;
     tags?: string[];
     isPinned?: boolean;
+    createdAt?: string;
   }): Promise<boolean> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
+
+      // Check if note exists in Supabase to preserve its original created_at timestamp
+      let originalCreatedAt = note.createdAt;
+      if (!originalCreatedAt) {
+        const { data: existing } = await supabase
+          .from('notes')
+          .select('created_at')
+          .eq('id', note.id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (existing?.created_at) {
+          originalCreatedAt = existing.created_at;
+        }
+      }
 
       const row = {
         id: note.id,
@@ -538,7 +583,7 @@ export const supabaseDb = {
         content: note.content,
         tags: note.tags || [],
         is_pinned: note.isPinned || false,
-        created_at: new Date().toISOString(),
+        created_at: originalCreatedAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
@@ -582,6 +627,395 @@ export const supabaseDb = {
       return true;
     } catch (e) {
       console.warn('deleteNote exception', e);
+      return false;
+    }
+  },
+
+  // =========================================================================
+  // 6. REAL RATINGS & REVIEWS (Priority 3)
+  // =========================================================================
+
+  /**
+   * Fetch real ratings from public.paper_ratings table and compute genuine average
+   */
+  async fetchPaperRatings(paperId: string): Promise<{
+    rating?: number;
+    ratingCount: number;
+    userRating?: number;
+    userReviewText?: string;
+    reviews: Array<{ id: string; stars: number; text?: string; authorName: string; createdAt: string; userId: string }>;
+  }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase
+        .from('paper_ratings')
+        .select('*')
+        .eq('paper_id', paperId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        // Graceful fallback to paper row if paper_ratings table not yet provisioned in live DB
+        return { rating: undefined, ratingCount: 0, reviews: [] };
+      }
+
+      if (!data || data.length === 0) {
+        return { rating: undefined, ratingCount: 0, reviews: [] };
+      }
+
+      const totalStars = data.reduce((acc, row) => acc + Number(row.rating), 0);
+      const avg = Number((totalStars / data.length).toFixed(1));
+
+      let userRating: number | undefined;
+      let userReviewText: string | undefined;
+
+      if (user) {
+        const myRating = data.find((r) => r.user_id === user.id);
+        if (myRating) {
+          userRating = Number(myRating.rating);
+          userReviewText = myRating.review_text || undefined;
+        }
+      }
+
+      const reviews = data.map((r) => ({
+        id: r.id,
+        stars: Number(r.rating),
+        text: r.review_text || undefined,
+        authorName: r.user_display_name || 'Student',
+        createdAt: r.created_at,
+        userId: r.user_id,
+      }));
+
+      return {
+        rating: avg,
+        ratingCount: data.length,
+        userRating,
+        userReviewText,
+        reviews,
+      };
+    } catch (err) {
+      console.warn('fetchPaperRatings error:', err);
+      return { rating: undefined, ratingCount: 0, reviews: [] };
+    }
+  },
+
+  /**
+   * Submit or update real rating: 1 per user per paper, verified with auth.uid()
+   */
+  async submitPaperRating(
+    paperId: string,
+    rating: number,
+    reviewText?: string,
+    displayName?: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return { success: false, error: new Error('You must be signed in to rate this paper.') };
+      }
+
+      if (rating < 1 || rating > 5) {
+        return { success: false, error: new Error('Rating must be between 1 and 5 stars.') };
+      }
+
+      const author = displayName?.trim() || user.user_metadata?.full_name || user.user_metadata?.name || 'Student';
+
+      const payload = {
+        paper_id: paperId,
+        user_id: user.id,
+        rating,
+        review_text: reviewText?.trim() || null,
+        user_display_name: author,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('paper_ratings')
+        .upsert([payload], { onConflict: 'user_id,paper_id' });
+
+      if (error) {
+        console.warn('submitPaperRating DB error:', error.message);
+        return { success: false, error: new Error(error.message) };
+      }
+
+      return { success: true, error: null };
+    } catch (err: any) {
+      console.warn('submitPaperRating exception:', err);
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  },
+
+  // =========================================================================
+  // 7. REPORT & MODERATION SYSTEM (Priority 6 & Priority 2)
+  // =========================================================================
+
+  /**
+   * Submit a community report against a paper
+   */
+  async submitReport(data: {
+    paperId: string;
+    reasonCategory: string;
+    reasonDetails: string;
+    evidenceUrl?: string;
+    reporterName: string;
+    reporterEmail?: string;
+  }): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Duplicate report check: prevent spamming same paper with pending report
+      if (user) {
+        const { data: existing } = await supabase
+          .from('paper_reports')
+          .select('id')
+          .eq('paper_id', data.paperId)
+          .eq('reporter_id', user.id)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+        if (existing) {
+          return { success: false, error: new Error('You already have a pending report under review for this paper.') };
+        }
+      }
+
+      const payload = {
+        paper_id: data.paperId,
+        reporter_id: user?.id || null,
+        reporter_name: data.reporterName.trim() || 'Student',
+        reporter_email: data.reporterEmail?.trim() || null,
+        reason_category: data.reasonCategory,
+        reason_details: data.reasonDetails.trim(),
+        evidence_url: data.evidenceUrl?.trim() || null,
+        status: 'pending',
+      };
+
+      const { error } = await supabase
+        .from('paper_reports')
+        .insert([payload]);
+
+      if (error) {
+        console.warn('submitReport error:', error.message);
+        return { success: false, error: new Error(error.message) };
+      }
+
+      return { success: true, error: null };
+    } catch (err: any) {
+      console.warn('submitReport exception:', err);
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  },
+
+  /**
+   * Fetch all moderation reports (Protected for Admins/Moderators)
+   */
+  async fetchReports(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('paper_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('fetchReports error:', error.message);
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.warn('fetchReports exception:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Update report status (Dismiss or Resolve) and write to moderation audit trail
+   */
+  async updateReportStatus(
+    reportId: string,
+    status: 'resolved' | 'dismissed' | 'takedown',
+    resolutionNotes?: string,
+    paperId?: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { success: false, error: new Error('Admin credentials required') };
+
+      const { error } = await supabase
+        .from('paper_reports')
+        .update({
+          status,
+          resolution_notes: resolutionNotes?.trim() || null,
+          resolved_by: user.id,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', reportId);
+
+      if (error) {
+        return { success: false, error: new Error(error.message) };
+      }
+
+      // Record in audit log
+      try {
+        await supabase.from('moderation_logs').insert([{
+          moderator_id: user.id,
+          action: `report_${status}`,
+          target_type: 'report',
+          target_id: reportId,
+          reason: resolutionNotes || `Report marked as ${status}`,
+          metadata: { paperId, reportId, status }
+        }]);
+      } catch (logErr) {
+        console.warn('Could not record moderation log:', logErr);
+      }
+
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  },
+
+  /**
+   * Takedown / Unpublish a document with recorded reason in audit trail
+   */
+  async takedownPaper(paperId: string, reason: string): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { success: false, error: new Error('Admin credentials required') };
+
+      // Update in papers table
+      await supabase
+        .from('papers')
+        .update({ status: 'rejected', rejection_reason: `Taken down: ${reason}` })
+        .eq('id', paperId);
+
+      // Update in community_pyqs table
+      await supabase
+        .from('community_pyqs')
+        .update({ status: 'taken_down', is_flagged: true })
+        .eq('id', paperId);
+
+      // Record in audit log
+      try {
+        await supabase.from('moderation_logs').insert([{
+          moderator_id: user.id,
+          action: 'takedown_paper',
+          target_type: 'paper',
+          target_id: paperId,
+          reason,
+          metadata: { paperId, takenDownAt: new Date().toISOString() }
+        }]);
+      } catch (logErr) {
+        console.warn('Could not record moderation log:', logErr);
+      }
+
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  },
+
+  /**
+   * Suspend a user account with recorded reason and duration
+   */
+  async suspendUser(
+    userId: string,
+    userEmail?: string,
+    reason: string = '',
+    durationDays: number = 7
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { success: false, error: new Error('Admin credentials required') };
+
+      const until = new Date(Date.now() + durationDays * 86400000).toISOString();
+
+      await supabase
+        .from('user_moderation_status')
+        .upsert([{
+          user_id: userId,
+          is_suspended: true,
+          suspension_reason: reason,
+          suspended_until: until,
+          suspended_by: user.id,
+          updated_at: new Date().toISOString(),
+        }]);
+
+      // Record in audit log
+      try {
+        await supabase.from('moderation_logs').insert([{
+          moderator_id: user.id,
+          moderator_email: user.email,
+          action: 'suspend_user',
+          target_type: 'user',
+          target_id: userId,
+          reason,
+          metadata: { userId, userEmail, durationDays, suspendedUntil: until }
+        }]);
+      } catch (logErr) {
+        console.warn('Could not record moderation log:', logErr);
+      }
+
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  },
+
+  /**
+   * Fetch moderation audit trail
+   */
+  async fetchModerationLogs(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('moderation_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.warn('fetchModerationLogs error:', error.message);
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  /**
+   * Check if the current user is a trusted admin/owner via secure app_metadata or user_roles table
+   * Priority 2: Never trusts client-set user_metadata
+   */
+  async isCurrentUserAdmin(): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+
+      // 1. Check secure server-controlled app_metadata (cannot be written by client)
+      const appRole = user.app_metadata?.role;
+      const isAdminAppMeta = appRole === 'owner' || appRole === 'admin' || user.app_metadata?.is_admin === true;
+      if (isAdminAppMeta) return true;
+
+      // 2. Check public.user_roles table
+      const { data: roleRow } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (roleRow && (roleRow.role === 'owner' || roleRow.role === 'admin')) {
+        return true;
+      }
+
+      // 3. Fallback check for designated project owner email from environment
+      const ownerEmail = (import.meta.env.VITE_OWNER_EMAIL || 'teamstudify5@gmail.com').toLowerCase().trim();
+      if (user.email && user.email.toLowerCase().trim() === ownerEmail) {
+        return true;
+      }
+
+      return false;
+    } catch {
       return false;
     }
   },

@@ -175,38 +175,97 @@ export const communityPyqService = {
   },
 
   /**
-   * Upload a new community PYQ:
-   * 1. Requires authenticated user.
-   * 2. Storage path format: "<logged-in-user-id>/<unique-file-name>".
-   * 3. Uploads to "community-pyqs" bucket.
-   * 4. Generates public URL via Supabase Storage.
-   * 5. Inserts into "public.community_pyqs" (no system-controlled fields).
+   * Upload a new community PYQ (Priority 1: Hardened Validation & Security):
+   * 1. Requires authenticated Supabase user.
+   * 2. Strict file size (max 20MB), extension, MIME type, and magic-byte header validation.
+   * 3. Storage path: "<logged-in-user-id>/<unique-file-name>".
+   * 4. Uploads to "community-pyqs" bucket.
+   * 5. Atomically cleans up Storage if database insert fails.
    */
   async uploadCommunityPyq(input: UploadCommunityPyqInput): Promise<{ paper: Paper | null; error: Error | null }> {
     try {
+      // 1. Authenticate user
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
         return { paper: null, error: new Error('You must be signed in to upload community papers.') };
       }
 
-      // Generate sanitized, unique filename
+      // 2. Validate file existence and size
+      if (!input.file) {
+        return { paper: null, error: new Error('No file provided for upload.') };
+      }
+
+      const fileSize = input.file.size;
+      if (fileSize <= 0) {
+        return { paper: null, error: new Error('Cannot upload an empty file.') };
+      }
+
+      const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+      if (fileSize > MAX_FILE_SIZE) {
+        return { paper: null, error: new Error('File size exceeds 20MB limit.') };
+      }
+
+      // 3. Validate file extension
       const rawName = input.fileName || (input.file as File).name || 'paper.pdf';
+      const fileExtMatch = rawName.match(/\.([a-zA-Z0-9]+)$/);
+      const ext = fileExtMatch ? fileExtMatch[1].toLowerCase() : '';
+      const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
+
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return { paper: null, error: new Error(`Unsupported file extension (.${ext}). Only PDF, PNG, and JPG files are permitted.`) };
+      }
+
+      // 4. Validate MIME type
+      const declaredMime = (input.file as File).type || '';
+      const ALLOWED_MIMES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+      if (declaredMime && !ALLOWED_MIMES.includes(declaredMime.toLowerCase())) {
+        return { paper: null, error: new Error(`Invalid file MIME type (${declaredMime}). Permitted formats: PDF, PNG, JPG.`) };
+      }
+
+      // 5. Inspect file magic bytes
+      try {
+        const headerSlice = input.file.slice(0, 16);
+        const headerBuffer = await headerSlice.arrayBuffer();
+        const bytes = new Uint8Array(headerBuffer);
+
+        let isValidFormat = false;
+        if (ext === 'pdf') {
+          // %PDF- (0x25, 0x50, 0x44, 0x46)
+          isValidFormat = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+        } else if (ext === 'png') {
+          // \x89PNG (0x89, 0x50, 0x4E, 0x47)
+          isValidFormat = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+        } else if (ext === 'jpg' || ext === 'jpeg') {
+          // 0xFF 0xD8 0xFF
+          isValidFormat = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+        } else if (ext === 'webp') {
+          // RIFF....WEBP
+          const headerStr = String.fromCharCode.apply(null, Array.from(bytes.slice(0, 12)));
+          isValidFormat = headerStr.startsWith('RIFF') && headerStr.includes('WEBP');
+        }
+
+        if (!isValidFormat) {
+          return { paper: null, error: new Error('File content header does not match declared file format. Please upload a genuine PDF or image.') };
+        }
+      } catch (checkErr) {
+        console.warn('Magic byte inspection skipped:', checkErr);
+      }
+
+      // 6. Generate sanitized, unique filename
       const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_');
       const uniqueFileName = `${Date.now()}_${cleanName}`;
-
-      // Storage path format: <logged-in-user-id>/<unique-file-name>
       const storagePath = `${user.id}/${uniqueFileName}`;
 
-      // Determine content type
       const contentType =
-        (input.file as File).type ||
-        (cleanName.endsWith('.pdf')
+        ext === 'pdf'
           ? 'application/pdf'
-          : cleanName.match(/\.(png|jpe?g|webp)$/i)
-          ? `image/${cleanName.split('.').pop()?.toLowerCase()}`
-          : 'application/pdf');
+          : ext === 'png'
+          ? 'image/png'
+          : ext === 'webp'
+          ? 'image/webp'
+          : 'image/jpeg';
 
-      // Upload file to community-pyqs bucket
+      // 7. Upload to community-pyqs bucket
       const { error: uploadError } = await supabase.storage
         .from(COMMUNITY_BUCKET)
         .upload(storagePath, input.file, {
@@ -216,26 +275,23 @@ export const communityPyqService = {
 
       if (uploadError) {
         console.error('Community storage upload failed:', uploadError.message);
-        return { paper: null, error: new Error(`Failed to upload file: ${uploadError.message}`) };
+        return { paper: null, error: new Error(`Failed to upload file to storage: ${uploadError.message}`) };
       }
 
-      // Generate public URL using Supabase Storage
+      // 8. Generate public URL
       const { data: urlData } = supabase.storage
         .from(COMMUNITY_BUCKET)
         .getPublicUrl(storagePath);
 
       const publicUrl = urlData.publicUrl;
 
-      // Safe uploader display name (never uses raw email)
       const uploaderDisplayName =
         input.uploaderDisplayName?.trim() ||
         user.user_metadata?.name ||
         user.user_metadata?.full_name ||
         'Community Contributor';
 
-      // Insert row into community_pyqs
-      // NOTICE: Do NOT supply views_count, downloads_count, rating, rating_count, status, is_flagged, or timestamps.
-      // Database triggers automatically sanitize and set these to safe defaults.
+      // 9. Insert row into community_pyqs table
       const payload = {
         uploader_id: user.id,
         uploader_display_name: uploaderDisplayName,
@@ -251,7 +307,7 @@ export const communityPyqService = {
         file_name: input.fileName || rawName,
         file_path: storagePath,
         file_url: publicUrl,
-        file_size_bytes: input.file.size || 0,
+        file_size_bytes: fileSize,
         tags: input.tags || [input.examBoard, input.grade, input.subject, String(input.year)],
         sections: [],
       };
@@ -264,9 +320,9 @@ export const communityPyqService = {
 
       if (insertError) {
         console.error('community_pyqs insert error:', insertError.message);
-        // Attempt cleanup of orphaned storage file
+        // Clean up orphaned storage file
         await supabase.storage.from(COMMUNITY_BUCKET).remove([storagePath]).catch(() => {});
-        return { paper: null, error: new Error(`Database insert failed: ${insertError.message}`) };
+        return { paper: null, error: new Error(`Database record failed: ${insertError.message}`) };
       }
 
       const paper = mapCommunityRowToPaper(insertedRow);

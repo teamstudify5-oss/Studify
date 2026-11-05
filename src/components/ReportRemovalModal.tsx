@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, AlertTriangle, Send, CheckCircle2, ShieldAlert, FileText, User } from 'lucide-react';
 import { Paper } from '../types';
 import { RemovalReasonCategory } from '../types/removal';
 import { removalService } from '../services/removalService';
+import { supabaseDb } from '../services/supabaseDb';
 import { useAuth } from '../context/AuthContext';
 
 interface ReportRemovalModalProps {
@@ -15,38 +16,43 @@ interface ReportRemovalModalProps {
 const REASON_CATEGORIES: { value: RemovalReasonCategory; label: string; description: string }[] = [
   {
     value: 'copyright',
-    label: 'Copyright or Ownership Dispute',
-    description: 'This document infringes intellectual property or proprietary rights.',
+    label: 'Copyright concern',
+    description: 'Document infringes intellectual property or proprietary rights.',
   },
   {
-    value: 'incorrect_solution',
-    label: 'Incorrect Answer Key / Solution',
-    description: 'The marking scheme or answers contain errors or misleading guidance.',
+    value: 'incorrect_content',
+    label: 'Incorrect content',
+    description: 'The questions, marking schemes, or answers contain errors or misleading guidance.',
   },
   {
     value: 'poor_quality',
-    label: 'Illegible Scan / Poor Quality',
-    description: 'Unreadable text, blurry handwriting, or truncated pages.',
+    label: 'Poor quality',
+    description: 'Unreadable text, blurry scan, illegible handwriting, or missing pages.',
   },
   {
     value: 'duplicate',
-    label: 'Duplicate Paper',
-    description: 'This exact question paper already exists on the platform.',
+    label: 'Duplicate document',
+    description: 'This exact question paper already exists on Studify.',
   },
   {
-    value: 'outdated_syllabus',
-    label: 'Outdated or Inaccurate Syllabus / Metadata',
-    description: 'Incorrect year, board, subject tag, or deleted curriculum topics.',
+    value: 'spam',
+    label: 'Spam',
+    description: 'Promotional material, irrelevant advertising, or non-educational content.',
   },
   {
-    value: 'inappropriate',
-    label: 'Inappropriate Content',
-    description: 'Spam, non-educational material, or offensive marks.',
+    value: 'unsafe_file',
+    label: 'Unsafe file',
+    description: 'Corrupted document, harmful scripts, suspicious redirects, or malicious code.',
+  },
+  {
+    value: 'privacy_violation',
+    label: 'Privacy violation',
+    description: 'Contains confidential student information, personal contact numbers, or unredacted IDs.',
   },
   {
     value: 'other',
-    label: 'Other Reason',
-    description: 'Another specific issue requiring uploader intervention.',
+    label: 'Other',
+    description: 'Another specific issue requiring administrative review.',
   },
 ];
 
@@ -65,12 +71,65 @@ export const ReportRemovalModal: React.FC<ReportRemovalModalProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+
+  // Capture trigger element and manage focus / escape key (Bug 18)
+  useEffect(() => {
+    if (isOpen) {
+      triggerElementRef.current = document.activeElement as HTMLElement;
+      // Focus first interactive element inside modal
+      const timer = setTimeout(() => {
+        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable && focusable.length > 0) {
+          focusable[0].focus();
+        }
+      }, 50);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          handleResetAndClose();
+        } else if (e.key === 'Tab') {
+          // Focus trap
+          const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (!focusable || focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else if (triggerElementRef.current) {
+      triggerElementRef.current.focus();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!details.trim()) {
-      setErrorMessage('Please provide a specific reason explaining why this paper should be removed.');
+      setErrorMessage('Please provide a specific explanation describing the issue.');
       return;
     }
 
@@ -78,21 +137,39 @@ export const ReportRemovalModal: React.FC<ReportRemovalModalProps> = ({
     setErrorMessage(null);
 
     try {
-      await removalService.createRequest({
-        paper,
-        reporterName: reporterName.trim() || 'Student Contributor',
-        reporterEmail: reporterEmail.trim(),
+      // 1. Submit report to Supabase DB
+      await supabaseDb.submitReport({
+        paperId: paper.id,
         reasonCategory: category,
         reasonDetails: details.trim(),
+        reporterEmail: reporterEmail.trim(),
+        reporterName: reporterName.trim() || 'Student Contributor',
       });
+
+      // 2. Also register in local removalService for notifications
+      try {
+        await removalService.createRequest({
+          paper,
+          reporterName: reporterName.trim() || 'Student Contributor',
+          reporterEmail: reporterEmail.trim(),
+          reasonCategory: category,
+          reasonDetails: details.trim(),
+        });
+      } catch (localErr) {
+        console.warn('Local removal service synced via DB', localErr);
+      }
 
       setIsSuccess(true);
       if (onRequestSubmitted) {
         onRequestSubmitted();
       }
-    } catch (err) {
-      console.error('Failed to create removal request', err);
-      setErrorMessage('Could not deliver removal request. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to submit report', err);
+      if (err?.message?.includes('already been submitted')) {
+        setErrorMessage('A report for this document is already under review by moderators.');
+      } else {
+        setErrorMessage(err?.message || 'Could not deliver report. Please check your connection and try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -105,35 +182,40 @@ export const ReportRemovalModal: React.FC<ReportRemovalModalProps> = ({
     onClose();
   };
 
-  const uploaderName = paper.submittedBy?.name || 'Uploader';
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
       onClick={handleResetAndClose}
+      role="presentation"
     >
       <div
-        className="relative w-full max-w-lg bg-[#0D1526] border border-white/[0.14] rounded-2xl shadow-2xl overflow-hidden text-[#F8FAFC]"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="report-modal-title"
+        className="relative w-full max-w-lg bg-[var(--surface-main)]/95 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl shadow-xl overflow-hidden text-[var(--text-primary)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/[0.08] bg-[#101B2D]/70">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border-divider)] bg-[var(--surface-elevated)]/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-400/30 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-[var(--accent-red)]/15 border border-[var(--accent-red)]/30 flex items-center justify-center text-[var(--color-red)]">
               <ShieldAlert className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#F8FAFC]">
-                Request Paper Removal
+              <h2 id="report-modal-title" className="text-base font-bold text-[var(--text-primary)]">
+                Report Document
               </h2>
-              <p className="text-xs text-[#A7B4C8]">
-                Sent directly to the uploader's account
+              <p className="text-xs text-[var(--text-secondary)]">
+                Submit evidence for administrative moderation and review
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={handleResetAndClose}
-            className="p-1.5 rounded-lg text-[#A7B4C8] hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer btn-quad-border"
+            aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
           </button>
@@ -141,150 +223,134 @@ export const ReportRemovalModal: React.FC<ReportRemovalModalProps> = ({
 
         {isSuccess ? (
           <div className="p-6 sm:p-8 text-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-400 flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--accent-green)]/15 border border-[var(--color-green)]/30 text-[var(--color-green)] flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-[#F8FAFC]">
-              Removal Request Sent
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">
+              Report Submitted for Review
             </h3>
-            <p className="text-xs sm:text-sm text-[#A7B4C8] max-w-md mx-auto leading-relaxed">
-              Your removal request has been delivered directly to{' '}
-              <span className="font-semibold text-white">{uploaderName}</span>'s account inbox.
-              They have been prompted to review your feedback and remove or update the paper.
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed">
+              Your report has been securely registered in the moderation queue. The document team will review the issue and take action if guidelines are violated.
             </p>
             <div className="pt-2">
               <button
+                type="button"
                 onClick={handleResetAndClose}
-                className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md"
+                className="px-6 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all cursor-pointer btn-quad-border"
               >
-                Done
+                Close
               </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-            {/* Target Paper & Uploader Context Box */}
-            <div className="p-3.5 rounded-xl bg-[#142036] border border-white/[0.08] text-xs space-y-1.5">
-              <div className="font-semibold text-[#F8FAFC] line-clamp-1 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span>{paper.title}</span>
-              </div>
-              <div className="text-[11px] text-[#A7B4C8] flex flex-wrap items-center gap-2">
-                <span>{paper.examBoard}</span>
-                <span>·</span>
-                <span>{paper.subject} ({paper.year})</span>
-                <span>·</span>
-                <span className="text-amber-300 font-medium">
-                  Posted by: {uploaderName}
-                </span>
+          <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-xs">
+            {/* Paper Overview */}
+            <div className="p-3 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl flex items-center gap-3">
+              <FileText className="w-4 h-4 text-[var(--accent-blue)] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-[var(--text-primary)] truncate text-xs">
+                  {paper.title}
+                </div>
+                <div className="text-[11px] text-[var(--text-secondary)]">
+                  {paper.examBoard} · {paper.grade} · {paper.subject} ({paper.year})
+                </div>
               </div>
             </div>
 
-            {/* Explanatory Notice */}
-            <p className="text-xs text-[#A7B4C8] leading-relaxed">
-              Found an issue or need this paper removed? Select the reason below. Your request will be
-              delivered to <strong className="text-white">{uploaderName}</strong>'s account dashboard,
-              giving them the option to delete or update the document.
-            </p>
+            {/* Error Banner */}
+            {errorMessage && (
+              <div className="p-3 bg-[var(--accent-red)]/15 border border-[var(--accent-red)]/30 rounded-xl text-xs text-[var(--accent-red)] flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--accent-red)]" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
-            {/* Reason Category Selection */}
+            {/* Reason Category Picker */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-[#F8FAFC]">
-                Reason for Removal Request <span className="text-rose-400">*</span>
+              <label htmlFor="report-category" className="font-semibold text-[var(--text-primary)] block">
+                Primary Issue Category <span className="text-[var(--accent-red)]">*</span>
               </label>
-              <div className="grid grid-cols-1 gap-2">
+              <select
+                id="report-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as RemovalReasonCategory)}
+                className="w-full px-3 py-2.5 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)] text-xs cursor-pointer"
+              >
                 {REASON_CATEGORIES.map((cat) => (
-                  <label
-                    key={cat.value}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                      category === cat.value
-                        ? 'bg-cyan-500/10 border-cyan-400/50 text-[#F8FAFC]'
-                        : 'bg-[#101B2D]/60 border-white/[0.08] hover:border-white/[0.16] text-[#A7B4C8]'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="removalCategory"
-                      value={cat.value}
-                      checked={category === cat.value}
-                      onChange={() => setCategory(cat.value)}
-                      className="mt-0.5 text-cyan-400 focus:ring-cyan-500"
-                    />
-                    <div>
-                      <div className="font-semibold text-[#F8FAFC]">{cat.label}</div>
-                      <div className="text-[11px] text-[#A7B4C8] mt-0.5">{cat.description}</div>
-                    </div>
-                  </label>
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
                 ))}
-              </div>
+              </select>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                {REASON_CATEGORIES.find((c) => c.value === category)?.description}
+              </p>
             </div>
 
-            {/* Detailed Reason Field */}
+            {/* Reason Details */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-[#F8FAFC]">
-                Specific Explanation & Details <span className="text-rose-400">*</span>
+              <label htmlFor="report-details" className="font-semibold text-[var(--text-primary)] block">
+                Describe the specific issue <span className="text-[var(--accent-red)]">*</span>
               </label>
               <textarea
+                id="report-details"
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                placeholder="Explain why this paper should be removed (e.g. specific question errors, copyright claim, illegible pages)..."
+                placeholder="Please describe page numbers, incorrect questions, or copyright details..."
                 rows={3}
                 required
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#101B2D] border border-white/[0.14] focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-xs text-[#F8FAFC] placeholder-[#A7B4C8]/60 transition-all outline-none"
+                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-secondary)]/60 focus:outline-none focus:border-[var(--accent-blue)] text-xs resize-none"
               />
             </div>
 
-            {/* Reporter Contact Info */}
+            {/* Reporter Info (Optional) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-[#A7B4C8]">
-                  Your Name
+                <label htmlFor="reporter-name" className="text-[11px] text-[var(--text-secondary)] block">
+                  Your Name (optional)
                 </label>
                 <input
+                  id="reporter-name"
                   type="text"
                   value={reporterName}
                   onChange={(e) => setReporterName(e.target.value)}
-                  placeholder="e.g. Rahul S."
-                  className="w-full px-3 py-2 rounded-xl bg-[#101B2D] border border-white/[0.14] focus:border-cyan-400 text-xs text-[#F8FAFC] outline-none"
+                  placeholder="Anonymous Student"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)] text-xs"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-[#A7B4C8]">
-                  Your Email (optional)
+                <label htmlFor="reporter-email" className="text-[11px] text-[var(--text-secondary)] block">
+                  Your Email (for updates)
                 </label>
                 <input
+                  id="reporter-email"
                   type="email"
                   value={reporterEmail}
                   onChange={(e) => setReporterEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="w-full px-3 py-2 rounded-xl bg-[#101B2D] border border-white/[0.14] focus:border-cyan-400 text-xs text-[#F8FAFC] outline-none"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)] text-xs"
                 />
               </div>
             </div>
 
-            {errorMessage && (
-              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
-                {errorMessage}
-              </div>
-            )}
-
-            {/* Footer Buttons */}
-            <div className="pt-3 flex items-center justify-end gap-3 border-t border-white/[0.08]">
+            {/* Form Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border-divider)]">
               <button
                 type="button"
                 onClick={handleResetAndClose}
-                className="px-4 py-2 text-xs font-semibold text-[#A7B4C8] hover:text-white transition-colors"
+                disabled={isSubmitting}
+                className="px-4 py-2 border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer btn-quad-border"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md shadow-rose-950/30 flex items-center gap-1.5 disabled:opacity-50"
+                disabled={isSubmitting || !details.trim()}
+                className="px-5 py-2 bg-[var(--color-red)] hover:opacity-90 text-white font-semibold rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer btn-quad-border"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSubmitting ? 'Sending Request...' : 'Send Request to Uploader'}</span>
+                <span>{isSubmitting ? 'Submitting...' : 'Submit Report'}</span>
               </button>
             </div>
           </form>

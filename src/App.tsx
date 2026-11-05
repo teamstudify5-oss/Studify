@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Navbar } from './components/Navbar';
 import { AuthModal } from './components/AuthModal';
 import { LoginRequiredModal } from './components/LoginRequiredModal';
@@ -254,8 +255,8 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#050914] text-[#F8FAFC] selection:bg-cyan-500/20 selection:text-cyan-200 relative overflow-x-hidden">
-      {/* Visual reference atmospheric layered gradient background (deep navy, cyan, blue, emerald) */}
+    <div className="min-h-screen flex flex-col bg-transparent text-[var(--text-primary)] transition-colors duration-200 relative overflow-x-hidden">
+      {/* Visual reference atmospheric layered gradient background */}
       <div className="atmospheric-bg" aria-hidden="true" />
 
       {/* Floating Top Navigation */}
@@ -430,22 +431,22 @@ function MainApp() {
       </main>
 
       {/* Atmospheric Footer */}
-      <footer className="relative z-10 border-t border-white/[0.08] py-8 px-4 text-xs text-[#A7B4C8] text-center bg-[#0A1222]/50 backdrop-blur-md">
+      <footer className="relative z-10 border-t border-[var(--border-divider)] py-8 px-4 text-xs text-[var(--text-secondary)] text-center bg-[var(--surface-main)]/70 backdrop-blur-md">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 font-bold text-white">
-            <span className="text-cyan-400">Studify</span>
-            <span className="text-white/20">·</span>
-            <span className="text-[11px] text-[#A7B4C8] font-normal">Personal Study Workspace & PYQ Library</span>
+          <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
+            <span className="text-[var(--accent-blue)]">Studify</span>
+            <span className="text-[var(--border-divider)]">·</span>
+            <span className="text-[11px] text-[var(--text-secondary)] font-normal">Personal Study Workspace & PYQ Library</span>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[#A7B4C8]">
-            <button onClick={() => setCurrentTab('home')} className="hover:text-white transition-colors cursor-pointer">Home</button>
-            <button onClick={() => setCurrentTab('workspace')} className="hover:text-cyan-400 font-semibold transition-colors cursor-pointer">Study Workspace</button>
-            <button onClick={() => setCurrentTab('browse')} className="hover:text-white transition-colors cursor-pointer">Explore PYQs</button>
-            <button onClick={() => setCurrentTab('about')} className="hover:text-white transition-colors cursor-pointer">About</button>
-            <button onClick={() => setCurrentTab('upload')} className="hover:text-white transition-colors cursor-pointer">Upload</button>
-            <button onClick={() => setCurrentTab('login')} className="hover:text-cyan-400 transition-colors cursor-pointer">Sign In</button>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[var(--text-secondary)]">
+            <button onClick={() => setCurrentTab('home')} className="hover:text-[var(--text-primary)] transition-colors cursor-pointer">Home</button>
+            <button onClick={() => setCurrentTab('workspace')} className="hover:text-[var(--accent-blue)] font-semibold transition-colors cursor-pointer">Study Workspace</button>
+            <button onClick={() => setCurrentTab('browse')} className="hover:text-[var(--text-primary)] transition-colors cursor-pointer">Explore PYQs</button>
+            <button onClick={() => setCurrentTab('about')} className="hover:text-[var(--text-primary)] transition-colors cursor-pointer">About</button>
+            <button onClick={() => setCurrentTab('upload')} className="hover:text-[var(--text-primary)] transition-colors cursor-pointer">Upload</button>
+            <button onClick={() => setCurrentTab('login')} className="hover:text-[var(--accent-blue)] transition-colors cursor-pointer">Sign In</button>
           </div>
-          <p className="text-[11px] text-[#A7B4C8]/60">100% Free Public Student Workspace</p>
+          <p className="text-[11px] text-[var(--text-secondary)]/70">100% Free Public Student Workspace</p>
         </div>
       </footer>
 
@@ -487,8 +488,8 @@ function MainApp() {
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#101B2D] text-[#F8FAFC] border border-white/[0.14] text-xs px-4 py-2.5 rounded-xl shadow-2xl shadow-cyan-950/80 animate-in fade-in slide-in-from-bottom-2 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+        <div className="fixed bottom-6 right-6 z-50 bg-[var(--surface-main)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs px-3.5 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-[var(--accent-blue)]" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -498,8 +499,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

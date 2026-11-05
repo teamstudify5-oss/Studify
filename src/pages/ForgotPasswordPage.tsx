@@ -61,35 +61,35 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
           <span>Back to log in</span>
         </button>
 
-        <div className="bg-[#0A1222] border border-white/[0.1] rounded-2xl p-6 sm:p-8 shadow-xl">
+        <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-6 sm:p-7 shadow-lg">
           {step === 'request' && (
             <>
-              <div className="mb-6 space-y-1.5">
-                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              <div className="mb-5 space-y-1">
+                <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                   Reset password
                 </h1>
-                <p className="text-xs sm:text-sm text-neutral-400">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Enter your registered email address to receive password reset instructions.
                 </p>
               </div>
 
               {errorMessage && (
-                <div className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="mb-4 p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              <form onSubmit={handleRequestReset} className="space-y-4">
+              <form onSubmit={handleRequestReset} className="space-y-3.5">
                 <div>
                   <label
                     htmlFor="reset-email"
-                    className="block text-xs font-medium text-neutral-300 mb-1.5 text-left"
+                    className="block text-xs font-medium text-[var(--text-secondary)] mb-1 text-left"
                   >
                     Email address
                   </label>
                   <div className="relative flex items-center">
-                    <Mail className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+                    <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
                     <input
                       id="reset-email"
                       type="email"
@@ -99,7 +99,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
                       disabled={isLoading}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="student@example.com"
-                      className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-[#101B2D] border border-white/[0.1] rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-cyan-400 transition-colors disabled:opacity-60"
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -107,11 +107,11 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-[#050914] text-xs sm:text-sm font-bold rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  className="w-full mt-2 py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg transition-opacity disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-[#050914]" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       <span>Sending reset link...</span>
                     </>
                   ) : (
@@ -120,11 +120,11 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
                 </button>
               </form>
 
-              <div className="mt-6 pt-5 border-t border-white/[0.06] text-center">
+              <div className="mt-5 pt-4 border-t border-[var(--border-divider)] text-center">
                 <button
                   type="button"
                   onClick={() => onNavigateToLogin()}
-                  className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Remember your password? Log in
                 </button>

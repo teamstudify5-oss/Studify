@@ -2,7 +2,7 @@ export type ExamBoard = 'CBSE' | 'ICSE' | 'JEE Main' | 'JEE Advanced' | 'NEET UG
 
 export type GradeLevel = 'Class 9' | 'Class 10' | 'Class 11' | 'Class 12' | 'Competitive';
 
-export type PaperStatus = 'pending' | 'approved' | 'rejected';
+export type PaperStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'flagged' | 'archived' | 'takedown';
 
 export interface QuestionChoice {
   key: 'A' | 'B' | 'C' | 'D';
@@ -79,6 +79,9 @@ export interface Paper {
   ratingCount?: number;
   reviews?: PaperReview[];
   comments?: PaperComment[];
+  isFlagged?: boolean;
+  reportCount?: number;
+  moderationNotes?: string;
 }
 
 export type UserRole = 'student' | 'owner';
@@ -91,6 +94,12 @@ export interface User {
   avatarInitials: string;
   institution?: string;
   joinedDate: string;
+}
+
+export interface AppAdmin {
+  user_id: string;
+  role: 'owner' | 'moderator';
+  assigned_at: string;
 }
 
 export interface FilterState {

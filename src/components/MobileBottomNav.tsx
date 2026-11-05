@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, UploadCloud, Bookmark, User, ShieldAlert } from 'lucide-react';
+import { Home, Search, UploadCloud, Bookmark, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface MobileBottomNavProps {
@@ -10,10 +10,10 @@ interface MobileBottomNavProps {
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ 
   currentTab, 
-  setCurrentTab,
+  setCurrentTab, 
   onRequireLogin,
 }) => {
-  const { isAuthenticated, isOwner, openAuthModal } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   const handleUploadClick = () => {
     if (!isAuthenticated) {
@@ -40,13 +40,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   };
 
   return (
-    <nav className="sm:hidden fixed bottom-3 left-4 right-4 z-40 bg-[#0A1222]/90 backdrop-blur-xl border border-white/[0.14] rounded-2xl h-14 flex items-center justify-around px-2 shadow-2xl shadow-cyan-950/40">
+    <nav className="sm:hidden fixed bottom-3 left-4 right-4 z-40 bg-[var(--surface-elevated)]/95 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl h-14 flex items-center justify-around px-2 shadow-lg">
       <button
         onClick={() => setCurrentTab('home')}
-        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] ${
+        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] cursor-pointer ${
           currentTab === 'home' 
-            ? 'text-cyan-400 font-bold' 
-            : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+            ? 'text-[var(--accent-blue)] font-bold' 
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         }`}
       >
         <Home className="w-4 h-4" />
@@ -55,22 +55,22 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
       <button
         onClick={() => setCurrentTab('browse')}
-        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] ${
+        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] cursor-pointer ${
           currentTab === 'browse' 
-            ? 'text-cyan-400 font-bold' 
-            : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+            ? 'text-[var(--accent-blue)] font-bold' 
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         }`}
       >
         <Search className="w-4 h-4" />
-        <span className="text-[10px] mt-0.5">PYQs</span>
+        <span className="text-[10px] mt-0.5">Library</span>
       </button>
 
       <button
         onClick={handleUploadClick}
-        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] ${
+        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] cursor-pointer ${
           currentTab === 'upload' 
-            ? 'text-cyan-400 font-bold' 
-            : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+            ? 'text-[var(--accent-blue)] font-bold' 
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         }`}
       >
         <UploadCloud className="w-4 h-4" />
@@ -79,10 +79,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
       <button
         onClick={handleBookmarksClick}
-        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] ${
+        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] cursor-pointer ${
           currentTab === 'profile-bookmarks' 
-            ? 'text-cyan-400 font-bold' 
-            : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+            ? 'text-[var(--accent-blue)] font-bold' 
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         }`}
       >
         <Bookmark className="w-4 h-4" />
@@ -91,14 +91,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
       <button
         onClick={handleProfileClick}
-        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] ${
+        className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all min-h-[44px] cursor-pointer ${
           currentTab === 'profile' 
-            ? 'text-cyan-400 font-bold' 
-            : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+            ? 'text-[var(--accent-blue)] font-bold' 
+            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         }`}
       >
         <User className="w-4 h-4" />
-        <span className="text-[10px] mt-0.5">{isAuthenticated ? 'Library' : 'Sign in'}</span>
+        <span className="text-[10px] mt-0.5">{isAuthenticated ? 'Profile' : 'Sign in'}</span>
       </button>
     </nav>
   );

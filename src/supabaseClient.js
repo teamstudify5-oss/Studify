@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase project credentials (you can replace these two variables anytime)
-const SUPABASE_URL = "https://qmavgwghcolismyhfufn.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_c_GIM1sA7g9zcj9yXi-x_Q_OajYRgTT";
+// Read Supabase credentials from environment variables with fallback defaults
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "https://qmavgwghcolismyhfufn.supabase.co").trim();
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_c_GIM1sA7g9zcj9yXi-x_Q_OajYRgTT").trim();
 
 // Normalize URL to remove any trailing slash or /rest/v1 path if provided
 const normalizedUrl = SUPABASE_URL.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");

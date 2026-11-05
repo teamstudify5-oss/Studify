@@ -8,7 +8,7 @@ const PAPERS_STORAGE_KEY = 'pyq_papers_clean_v3';
 const SAVED_PAPERS_STORAGE_KEY = 'pyq_saved_paper_ids_clean_v3';
 const LEGACY_PAPERS_PURGED = 'studify_test_papers_purged_v3';
 
-// Clean out preexisting test papers from localStorage
+// Clean out legacy v1/v2 keys safely without removing user's v3 data
 function purgeLegacyTestPapers() {
   try {
     if (!localStorage.getItem(LEGACY_PAPERS_PURGED)) {
@@ -16,8 +16,7 @@ function purgeLegacyTestPapers() {
       localStorage.removeItem('pyq_papers');
       localStorage.removeItem('pyq_saved_paper_ids_v2');
       localStorage.removeItem('pyq_saved_paper_ids');
-      localStorage.removeItem(PAPERS_STORAGE_KEY);
-      localStorage.removeItem(SAVED_PAPERS_STORAGE_KEY);
+      // Bug 13 fix: Never delete current v3 user data
       localStorage.setItem(LEGACY_PAPERS_PURGED, 'true');
     }
   } catch (e) {
@@ -64,6 +63,17 @@ export const storageService = {
     }
   },
 
+  savePaper(paper: Paper): void {
+    const papers = this.getPapers();
+    const index = papers.findIndex((p) => p.id === paper.id);
+    if (index >= 0) {
+      papers[index] = paper;
+    } else {
+      papers.unshift(paper);
+    }
+    this.savePapers(papers);
+  },
+
   getApprovedPapers(): Paper[] {
     const all = this.getPapers();
     return all.filter((p) => p.status === 'approved');
@@ -94,8 +104,9 @@ export const storageService = {
       submittedAt: new Date().toISOString(),
       viewsCount: 0,
       downloadsCount: 0,
-      rating: 5.0,
-      ratingCount: 1,
+      // Priority 3: Do not fabricate ratings on new papers
+      rating: undefined,
+      ratingCount: 0,
       reviews: [],
       comments: [],
     };
@@ -166,11 +177,13 @@ export const storageService = {
     communityPyqService.incrementDownload(id);
   },
 
-  // Saved bookmarks
+  // Saved bookmarks - Bug 11 & Bug 12 & Bug 16 fixed
   async fetchSavedPaperIdsFromSupabase(): Promise<string[]> {
     try {
       const ids = await supabaseDb.loadSavedPaperIds();
-      if (ids && ids.length > 0) {
+      // Bug 12 fix: When user has 0 bookmarks in Supabase, an empty array is a valid result.
+      // An empty database result must remain empty and not fall back to stale local bookmarks.
+      if (Array.isArray(ids)) {
         localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(ids));
         return ids;
       }
@@ -183,7 +196,8 @@ export const storageService = {
   getSavedPaperIds(): string[] {
     try {
       const stored = localStorage.getItem(SAVED_PAPERS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : ['pyq-cbse-12-phy-2024', 'pyq-jee-main-2024-session1'];
+      // Bug 11 fix: Remove fabricated default bookmarks ['pyq-cbse-12-phy-2024', 'pyq-jee-main-2024-session1']
+      return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
     }
@@ -193,6 +207,31 @@ export const storageService = {
     return this.getSavedPaperIds().includes(id);
   },
 
+  async toggleSavePaperAsync(id: string): Promise<{ isSaved: boolean; error: Error | null }> {
+    try {
+      const saved = this.getSavedPaperIds();
+      const exists = saved.includes(id);
+      const next = exists ? saved.filter((i) => i !== id) : [...saved, id];
+
+      // Bug 16 fix: Await Supabase operation and confirm before updating local state
+      let opSuccess = false;
+      if (exists) {
+        opSuccess = await supabaseDb.removeSavedPaper(id);
+      } else {
+        opSuccess = await supabaseDb.savePaper(id);
+      }
+
+      if (!opSuccess) {
+        return { isSaved: exists, error: new Error('Failed to update bookmark in database') };
+      }
+
+      localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(next));
+      return { isSaved: !exists, error: null };
+    } catch (err: any) {
+      return { isSaved: this.isPaperSaved(id), error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  },
+
   toggleSavePaper(id: string): boolean {
     try {
       const saved = this.getSavedPaperIds();
@@ -200,11 +239,16 @@ export const storageService = {
       const next = exists ? saved.filter((i) => i !== id) : [...saved, id];
       localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(next));
 
-      // Real Supabase insert/delete queries
       if (exists) {
-        supabaseDb.removeSavedPaper(id).catch((e) => console.warn('Supabase removeSavedPaper failed', e));
+        supabaseDb.removeSavedPaper(id).catch((e) => {
+          console.warn('Supabase removeSavedPaper failed, rolling back', e);
+          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(saved));
+        });
       } else {
-        supabaseDb.savePaper(id).catch((e) => console.warn('Supabase savePaper failed', e));
+        supabaseDb.savePaper(id).catch((e) => {
+          console.warn('Supabase savePaper failed, rolling back', e);
+          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(saved));
+        });
       }
 
       return !exists;

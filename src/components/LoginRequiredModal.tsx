@@ -1,6 +1,5 @@
-import React from 'react';
-import { X, Sparkles, BookMarked, UploadCloud, MessageSquare, ShieldCheck, User } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import React, { useEffect, useRef } from 'react';
+import { X, Sparkles } from 'lucide-react';
 
 interface LoginRequiredModalProps {
   isOpen: boolean;
@@ -15,54 +14,96 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
   onSignIn,
   onCreateAccount,
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      triggerRef.current = document.activeElement as HTMLElement;
+      const timer = setTimeout(() => {
+        const firstFocusable = modalRef.current?.querySelector<HTMLElement>('button');
+        firstFocusable?.focus();
+      }, 50);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          onClose();
+        } else if (e.key === 'Tab') {
+          const focusable = modalRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])');
+          if (!focusable || focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else if (triggerRef.current) {
+      triggerRef.current.focus();
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="bg-[#101B2D]/95 border border-white/[0.16] rounded-3xl max-w-md w-full p-6 sm:p-7 text-[#F8FAFC] shadow-2xl shadow-cyan-950/40 relative overflow-hidden">
-        {/* Ambient Top Glow */}
-        <div
-          className="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none"
-          aria-hidden="true"
-        />
-        <div
-          className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none"
-          aria-hidden="true"
-        />
-
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in duration-150"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-required-title"
+        className="bg-[var(--surface-main)]/95 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl max-w-sm w-full p-6 text-[var(--text-primary)] shadow-2xl relative overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close Button */}
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-[#A7B4C8] hover:text-white hover:bg-white/10 transition-colors"
+            className="btn-quad-border p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+            aria-label="Close dialog"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Icon & Heading */}
-        <div className="text-center space-y-3 pt-1">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-teal-500/10 border border-cyan-400/30 flex items-center justify-center mx-auto text-cyan-400 shadow-lg shadow-cyan-500/10">
-            <Sparkles className="w-6 h-6" />
+        {/* Heading */}
+        <div className="text-center space-y-2 pt-1">
+          <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 flex items-center justify-center mx-auto shadow-xs">
+            <Sparkles className="w-5 h-5" />
           </div>
 
-          <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#F8FAFC]">
+          <h3 id="login-required-title" className="text-lg font-bold tracking-tight text-[var(--text-primary)]">
             Make Studify Yours
           </h3>
 
-          <p className="text-xs sm:text-sm text-[#A7B4C8] leading-relaxed max-w-xs mx-auto">
-            Sign in to save papers, manage your library, upload resources, and join the discussion.
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-xs mx-auto">
+            Sign in to bookmark questions, manage your study workspace, upload resources, and collaborate.
           </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="space-y-2.5 pt-6">
+        <div className="space-y-2 pt-5">
           <button
             onClick={() => {
               onClose();
               onSignIn();
             }}
-            className="w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.99]"
+            className="btn-quad-border w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs active:scale-[0.99] cursor-pointer"
           >
             Sign In
           </button>
@@ -72,14 +113,14 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
               onClose();
               onCreateAccount();
             }}
-            className="w-full py-3 px-4 bg-[#0A1222] hover:bg-[#15233D] border border-white/[0.14] hover:border-white/[0.24] text-[#F8FAFC] text-xs font-semibold rounded-xl transition-all"
+            className="btn-quad-border w-full py-2.5 px-4 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors cursor-pointer"
           >
             Create Account
           </button>
 
           <button
             onClick={onClose}
-            className="w-full py-2.5 text-xs text-[#A7B4C8] hover:text-white transition-colors"
+            className="btn-quad-border w-full py-2 px-4 bg-[var(--surface-secondary)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
           >
             Maybe Later
           </button>

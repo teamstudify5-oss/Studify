@@ -2,9 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Paper } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storage';
-import { removalService } from '../services/removalService';
-import { PaperRemovalRequest } from '../types/removal';
-import { FolderClosed, PlusCircle, Trash2, Eye, ShieldAlert, CheckCircle2, Edit2 } from 'lucide-react';
+import { communityPyqService } from '../services/communityPyqService';
+import { FolderClosed, PlusCircle, Trash2, Eye, Edit2 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
 
@@ -27,6 +26,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
 }) => {
   const { currentUser, isAuthenticated, openAuthModal } = useAuth();
   const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -45,210 +45,182 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
 
   if (!isAuthenticated || !currentUser) {
     return (
-      <div className="max-w-md mx-auto px-4 py-20 text-center space-y-4">
-        <div className="w-12 h-12 bg-[#171717] border border-white/[0.09] rounded-2xl flex items-center justify-center mx-auto text-[#F5F5F5]">
-          <FolderClosed className="w-5 h-5 text-[#A0A0A0]" />
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <div className="w-12 h-12 bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-2xl flex items-center justify-center mx-auto text-[var(--accent-blue)]">
+          <FolderClosed className="w-6 h-6" />
         </div>
-        <h1 className="text-xl font-semibold text-[#F5F5F5]">
-          Sign in to continue
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">
+          Sign in to view your papers
         </h1>
-        <p className="text-xs text-[#A0A0A0]">
-          Sign in to view question papers you have uploaded.
+        <p className="text-xs text-[var(--text-secondary)]">
+          Sign in to manage question papers you have contributed to the community.
         </p>
         <button
+          type="button"
           onClick={() => openAuthModal('login')}
-          className="px-5 py-2.5 bg-[#F5F5F5] hover:bg-white text-[#090909] text-xs font-semibold rounded-xl transition-all shadow-sm"
+          className="px-5 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all cursor-pointer btn-quad-border"
         >
-          Sign in
+          Sign In
         </button>
       </div>
     );
   }
 
+  // Filter papers authored by active user
   const userSubmissions = papers.filter((p) => p.submittedBy.id === currentUser.id);
 
-  const [removalRequests, setRemovalRequests] = useState<PaperRemovalRequest[]>(() =>
-    removalService.getRequestsForUploader(currentUser.id, currentUser.email)
-  );
-
-  const refreshRequests = () => {
-    setRemovalRequests(removalService.getRequestsForUploader(currentUser.id, currentUser.email));
-  };
-
-  useEffect(() => {
-    refreshRequests();
-    const handleUpdate = () => refreshRequests();
-    window.addEventListener('studify:removal-requests-updated', handleUpdate);
-    return () => window.removeEventListener('studify:removal-requests-updated', handleUpdate);
-  }, [currentUser]);
-
-  const pendingRequests = removalRequests.filter((r) => r.status === 'pending');
-
-  const getStatusText = (status: Paper['status']) => {
-    switch (status) {
-      case 'pending':
-        return 'Waiting for review';
-      case 'approved':
-        return 'Approved';
-      case 'rejected':
-        return 'Not approved';
+  const handleDelete = async (paper: Paper) => {
+    if (!window.confirm(`Delete "${paper.title}"? This will permanently delete the document and purge its file from storage.`)) {
+      return;
     }
-  };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Delete this submission?')) {
-      storageService.deletePaper(id);
-      onPaperDeleted(id);
-    }
-  };
-
-  const handleDismissRemoval = (requestId: string) => {
-    removalService.dismissRequest(requestId);
-    refreshRequests();
-  };
-
-  const handleAcceptRemoval = (requestId: string, paperId: string) => {
-    if (window.confirm('Are you sure you want to remove this paper permanently as requested?')) {
-      removalService.removePaperViaRequest(requestId, paperId);
-      onPaperDeleted(paperId);
-      refreshRequests();
+    setDeletingId(paper.id);
+    try {
+      const res = await communityPyqService.deleteCommunityPyq(paper.id, paper.filePath || paper.fileUrl);
+      if (res.success) {
+        storageService.deletePaper(paper.id);
+        onPaperDeleted(paper.id);
+      } else {
+        alert(res.error?.message || 'Could not delete paper.');
+      }
+    } catch {
+      alert('Could not delete paper.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-[#F5F5F5] tracking-tight">
-            My materials
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-5 shadow-xs">
+        <div className="space-y-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+            My Uploaded Papers
           </h1>
-          <p className="text-xs text-[#A0A0A0] mt-1">
-            Question papers uploaded by {currentUser.name}
+          <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
+            Manage the question papers you have published to the Community Library.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={onNavigateToUpload}
-          className="px-3.5 py-1.5 bg-[#171717] hover:bg-[#1D1D1D] border border-white/[0.09] hover:border-white/[0.16] text-[#F5F5F5] text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all self-start sm:self-auto cursor-pointer btn-quad-border"
         >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>Upload paper</span>
+          <PlusCircle className="w-4 h-4" />
+          <span>Upload Another Paper</span>
         </button>
       </div>
 
+      {/* Submissions List */}
       {userSubmissions.length > 0 ? (
-        <div className="space-y-3">
-          {userSubmissions.map((paper) => (
-            <div
-              key={paper.id}
-              className="bg-[#171717] border border-white/[0.09] rounded-2xl p-4 sm:p-5 shadow-xl shadow-black/30 space-y-3"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-[#F5F5F5]">
+        <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl overflow-hidden shadow-xs">
+          <div className="divide-y divide-[var(--border-divider)]">
+            {userSubmissions.map((paper) => (
+              <div
+                key={paper.id}
+                className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--surface-secondary)]/50 transition-colors"
+              >
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center text-xs text-[var(--text-secondary)] gap-1.5">
+                    <span className="font-semibold text-[var(--text-primary)]">{paper.examBoard}</span>
+                    <span>·</span>
+                    <span>{paper.grade}</span>
+                    <span>·</span>
+                    <span className="text-[var(--accent-blue)]">{paper.subject}</span>
+                    <span>·</span>
+                    <span className="font-mono tabular-nums">{paper.year}</span>
+                    {paper.status === 'takedown' && (
+                      <>
+                        <span>·</span>
+                        <span className="text-[var(--color-red)] font-semibold">Takedown</span>
+                      </>
+                    )}
+                  </div>
+
+                  <h3
+                    onClick={() => onSelectPaper(paper)}
+                    className="text-sm sm:text-base font-semibold text-[var(--text-primary)] hover:text-[var(--accent-blue)] cursor-pointer transition-colors truncate"
+                  >
                     {paper.title}
                   </h3>
-                  <div className="text-xs text-[#A0A0A0] flex flex-wrap items-center gap-2">
-                    <span>Submitted on {new Date(paper.submittedAt).toLocaleDateString()}</span>
-                    <span aria-hidden="true" className="text-[#707070]">·</span>
-                    <span>
-                      Status: <strong className="text-white font-medium">{getStatusText(paper.status)}</strong>
-                    </span>
+
+                  <div className="flex flex-wrap items-center text-xs text-[var(--text-secondary)] gap-3 font-mono tabular-nums">
+                    <span>{paper.viewsCount} Views</span>
+                    <span>·</span>
+                    <span>{paper.downloadsCount} Downloads</span>
+                    <span>·</span>
+                    <span>Rating: {paper.rating ? paper.rating.toFixed(1) : '0.0'} ({paper.ratingCount || 0})</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
                   <button
+                    type="button"
                     onClick={() => onSelectPaper(paper)}
-                    className="px-3 py-1.5 text-xs font-medium text-[#F5F5F5] bg-[#1D1D1D] hover:bg-[#252525] border border-white/[0.09] rounded-xl transition-colors flex items-center gap-1"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer btn-quad-border"
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                     <span>View</span>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => setEditingPaper(paper)}
-                    className="px-3 py-1.5 text-xs font-medium text-[#F5F5F5] bg-[#1D1D1D] hover:bg-[#252525] border border-white/[0.09] rounded-xl transition-colors flex items-center gap-1"
-                    title="Edit submission"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer btn-quad-border"
                   >
-                    <Edit2 className="w-3.5 h-3.5 text-cyan-400" />
+                    <Edit2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                     <span>Edit</span>
                   </button>
 
                   <button
-                    onClick={() => handleDelete(paper.id)}
-                    className="p-1.5 text-[#707070] hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                    title="Delete submission"
+                    type="button"
+                    onClick={() => handleDelete(paper)}
+                    disabled={deletingId === paper.id}
+                    className="p-1.5 rounded-lg border border-[var(--color-red)]/30 hover:bg-[var(--accent-red-bg)] text-[var(--color-red)] transition-colors disabled:opacity-50 cursor-pointer btn-quad-border"
+                    title="Delete Paper"
+                    aria-label="Delete Paper"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-
-              {/* Removal Request alert on this paper */}
-              {removalRequests.filter((r) => r.paperId === paper.id && r.status === 'pending').map((req) => (
-                <div key={req.id} className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                      <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Removal Request from {req.reporterName}</span>
-                    </span>
-                    <span className="text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">
-                      {req.reasonCategory.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <p className="text-white text-xs bg-black/40 p-2 rounded-lg italic">
-                    "{req.reasonDetails}"
-                  </p>
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      onClick={() => handleDismissRemoval(req.id)}
-                      className="px-2.5 py-1 text-[11px] font-medium text-[#A0A0A0] hover:text-white bg-[#1D1D1D] rounded-lg transition-colors"
-                    >
-                      Dismiss
-                    </button>
-                    <button
-                      onClick={() => handleAcceptRemoval(req.id, paper.id)}
-                      className="px-3 py-1 text-[11px] font-semibold text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3 h-3 text-rose-400" />
-                      <span>Remove Paper</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {paper.status === 'rejected' && paper.rejectionReason && (
-                <div className="p-3 bg-[#101010] border border-white/[0.08] rounded-xl text-xs text-[#A0A0A0] space-y-0.5">
-                  <span className="text-[#F5F5F5] font-medium block">Feedback from reviewer:</span>
-                  <p>{paper.rejectionReason}</p>
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="py-14 text-center text-xs text-[#707070] border border-white/[0.08] rounded-2xl bg-[#171717] p-8 space-y-3">
-          <p className="font-medium text-[#F5F5F5]">You haven't uploaded any papers yet.</p>
+        <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-12 text-center space-y-4 shadow-xs">
+          <div className="w-12 h-12 bg-[var(--surface-secondary)] rounded-2xl flex items-center justify-center mx-auto text-[var(--accent-blue)]">
+            <FolderClosed className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-[var(--text-primary)]">No uploads yet</h3>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+              You haven't contributed any past examination papers yet. Uploading helps thousands of fellow students prepare effectively.
+            </p>
+          </div>
           <button
+            type="button"
             onClick={onNavigateToUpload}
-            className="px-4 py-2 bg-[#F5F5F5] hover:bg-white text-[#090909] font-medium text-xs rounded-xl transition-all"
+            className="px-5 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all inline-flex items-center gap-2 cursor-pointer btn-quad-border"
           >
-            Upload paper
+            <PlusCircle className="w-4 h-4" />
+            <span>Upload Your First Paper</span>
           </button>
         </div>
       )}
 
+      {/* Edit Metadata Modal */}
       {editingPaper && (
         <EditCommunityPyqModal
+          isOpen={true}
           paper={editingPaper}
-          isOpen={Boolean(editingPaper)}
           onClose={() => setEditingPaper(null)}
           onUpdated={(updated) => {
-            setEditingPaper(null);
-            const all = storageService.getPapers();
-            storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
             if (onPaperUpdated) onPaperUpdated(updated);
+            setEditingPaper(null);
           }}
         />
       )}

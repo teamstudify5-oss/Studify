@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Zap, X, Check, Folder, Tag, Sparkles, BookOpen, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Zap, X, Check, Folder, Tag, Sparkles, BookOpen, HelpCircle, Loader2 } from 'lucide-react';
 import { QuickCaptureType, StudyProject } from '../../types/workspace';
 import { workspaceService } from '../../services/workspaceService';
 
@@ -22,6 +22,51 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<string>(defaultProjectId || '');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+
+  // Manage accessibility focus & escape key (Bug 18)
+  useEffect(() => {
+    if (isOpen) {
+      triggerElementRef.current = document.activeElement as HTMLElement;
+      const timer = setTimeout(() => {
+        const textarea = modalRef.current?.querySelector<HTMLTextAreaElement>('textarea');
+        textarea?.focus();
+      }, 50);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          onClose();
+        } else if (e.key === 'Tab') {
+          const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (!focusable || focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else if (triggerElementRef.current) {
+      triggerElementRef.current.focus();
+    }
+  }, [isOpen, onClose]);
 
   const projects: StudyProject[] = workspaceService.getProjects();
 
@@ -38,48 +83,70 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
     setTags(tags.filter((t) => t !== tag));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
 
-    workspaceService.addQuickCapture({
-      title: title.trim() || undefined,
-      content: content.trim(),
-      type,
-      projectId: selectedProjectId || undefined,
-      tags
-    });
+    setIsSaving(true);
+    setSaveError(null);
 
-    onSaved(title || 'Quick thought');
-    onClose();
-    setTitle('');
-    setContent('');
-    setTags([]);
+    try {
+      // Priority 5 & Bug 16: Await actual persistence before confirming success
+      await workspaceService.addQuickCaptureAsync({
+        title: title.trim() || undefined,
+        content: content.trim(),
+        type,
+        projectId: selectedProjectId || undefined,
+        tags,
+      });
+
+      const savedTitle = title.trim() || 'Quick note';
+      setTitle('');
+      setContent('');
+      setTags([]);
+      setIsSaving(false);
+      onSaved(savedTitle);
+      onClose();
+    } catch (err: any) {
+      console.error('Quick capture failed to save', err);
+      setIsSaving(false);
+      setSaveError(err?.message || 'Could not save note to workspace. Please try again.');
+    }
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
       onClick={onClose}
+      role="presentation"
     >
       <div
-        className="w-full max-w-lg bg-[#0A1222] border border-white/[0.16] rounded-2xl shadow-2xl shadow-cyan-950/60 overflow-hidden flex flex-col"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-capture-title"
+        className="w-full max-w-lg bg-[var(--surface-main)]/95 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl shadow-2xl overflow-hidden flex flex-col text-[var(--text-primary)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/[0.08] flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-[var(--border-divider)] bg-[var(--surface-elevated)] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[var(--accent-yellow)]/15 text-[var(--accent-yellow)] border border-[var(--accent-yellow)]/30 flex items-center justify-center">
               <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-bold text-white">Quick Capture</h3>
-              <p className="text-[11px] text-[#A7B4C8]">Record thoughts, formulas, doubts & resources instantly</p>
+              <h3 id="quick-capture-title" className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
+                Quick Capture
+              </h3>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Record notes, formulas, or exam reminders instantly
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-[#A7B4C8] hover:text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] flex items-center justify-center transition-colors cursor-pointer btn-quad-border"
+            aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
           </button>
@@ -87,6 +154,12 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
+          {saveError && (
+            <div className="p-2.5 bg-[var(--accent-red)]/15 border border-[var(--accent-red)]/30 rounded-xl text-xs text-[var(--accent-red)]">
+              {saveError}
+            </div>
+          )}
+
           {/* Capture Type Selector */}
           <div className="grid grid-cols-4 gap-2">
             {[
@@ -102,10 +175,10 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   type="button"
                   key={item.id}
                   onClick={() => setType(item.id)}
-                  className={`py-2 px-2 rounded-xl text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all ${
+                  className={`btn-quad-border py-2 px-2 rounded-xl text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-sm'
-                      : 'bg-white/[0.04] text-[#A7B4C8] hover:bg-white/[0.08] border border-transparent'
+                      ? 'bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] border border-[var(--accent-blue)]/40 shadow-xs'
+                      : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)]'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -115,41 +188,47 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
             })}
           </div>
 
-          {/* Title (Optional) */}
+          {/* Content / Body - Primary Field */}
           <div>
-            <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Title or Headline (Optional)</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Lens Maker Formula sign convention"
-              className="w-full px-3 py-2 bg-[#101B2D] border border-white/[0.14] rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-cyan-400"
-            />
-          </div>
-
-          {/* Content / Body */}
-          <div>
-            <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Notes, Formula details, or Resource URL *</label>
+            <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
+              Note Content *
+            </label>
             <textarea
               required
               rows={4}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your study note, key derivation step, exam reminder, or paste a link..."
-              className="w-full px-3 py-2 bg-[#101B2D] border border-white/[0.14] rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-cyan-400 resize-none font-sans"
+              placeholder="Write your note, key formula, exam reminder, or paste a link..."
+              className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)] resize-none"
             />
           </div>
 
-          {/* Assign to Project */}
+          {/* Title (Optional) */}
+          <div>
+            <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
+              Title or Headline <span className="text-[10px] text-[var(--text-secondary)]/70">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Lens Maker Formula sign convention"
+              className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)]"
+            />
+          </div>
+
+          {/* Project & Tag row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Assign to Study Project</label>
+              <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
+                Assign to Project
+              </label>
               <select
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="w-full px-3 py-2 bg-[#101B2D] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400"
+                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)] cursor-pointer"
               >
-                <option value="">(Inbox / General Scratchpad)</option>
+                <option value="">(Inbox / General Notes)</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title}{p.subject ? ` (${p.subject})` : ''}
@@ -158,9 +237,10 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               </select>
             </div>
 
-            {/* Tags */}
             <div>
-              <label className="block text-[11px] text-[#A7B4C8] mb-1 font-medium">Add Tag</label>
+              <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
+                Add Tag
+              </label>
               <div className="flex gap-1.5">
                 <input
                   type="text"
@@ -173,12 +253,12 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     }
                   }}
                   placeholder="e.g. Optics, High-Yield"
-                  className="flex-1 px-3 py-2 bg-[#101B2D] border border-white/[0.14] rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-cyan-400"
+                  className="flex-1 px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)]"
                 />
                 <button
                   type="button"
                   onClick={handleAddTag}
-                  className="px-3 py-2 bg-white/[0.08] hover:bg-white/[0.15] text-xs font-semibold text-white rounded-xl"
+                  className="btn-quad-border px-3 py-2 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-semibold text-[var(--text-primary)] rounded-lg cursor-pointer"
                 >
                   Add
                 </button>
@@ -192,10 +272,15 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               {tags.map((t) => (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-[10px]"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--accent-blue)] text-[10px]"
                 >
                   #{t}
-                  <button type="button" onClick={() => handleRemoveTag(t)} className="hover:text-white">
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(t)}
+                    className="hover:text-[var(--text-primary)] cursor-pointer ml-1"
+                    aria-label={`Remove tag ${t}`}
+                  >
                     ×
                   </button>
                 </span>
@@ -204,22 +289,35 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           )}
 
           {/* Footer Actions */}
-          <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between">
-            <span className="text-[10px] text-[#A7B4C8]">Saved locally & synced to your personal workspace</span>
+          <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between">
+            <span className="text-[10px] text-[var(--text-secondary)]">
+              Persists securely to your workspace
+            </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 text-xs text-[#A7B4C8] hover:text-white"
+                disabled={isSaving}
+                className="btn-quad-border px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-gradient-to-r from-amber-500 to-teal-500 hover:from-amber-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                disabled={isSaving || !content.trim()}
+                className="btn-quad-border px-5 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
-                <Check className="w-3.5 h-3.5" />
-                <span>Save to Workspace</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Note</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ZoomIn, ZoomOut, Download, HelpCircle, BookOpen, Check } from 'lucide-react';
+import { ZoomIn, ZoomOut, Download, BookOpen, ExternalLink } from 'lucide-react';
 import { Paper } from '../types';
 import { supabaseStorage } from '../services/supabaseStorage';
 
@@ -10,7 +10,6 @@ interface PaperViewerProps {
 
 export const PaperViewer: React.FC<PaperViewerProps> = ({ paper, onDownload }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
-  const [revealedHints, setRevealedHints] = useState<{ [qId: string]: boolean }>({});
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loadingSignedUrl, setLoadingSignedUrl] = useState<boolean>(false);
 
@@ -47,37 +46,35 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({ paper, onDownload }) =
     setZoomLevel((prev) => Math.min(130, Math.max(80, prev + delta)));
   };
 
-  const toggleHint = (qId: string) => {
-    setRevealedHints((prev) => ({ ...prev, [qId]: !prev[qId] }));
-  };
-
   const sections = paper.sections || [];
 
   return (
-    <div className="border border-white/[0.14] rounded-3xl bg-[#101B2D]/90 backdrop-blur-xl overflow-hidden text-[#F8FAFC] shadow-2xl shadow-cyan-950/20">
-      {/* Floating Toolbar */}
-      <div className="border-b border-white/[0.08] px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 text-xs bg-[#0A1222]/80">
-        <div className="text-[#A7B4C8] truncate font-mono text-[11px] flex items-center gap-2">
-          <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+    <div className="border border-[var(--border-divider)] rounded-2xl bg-[var(--surface-main)]/90 backdrop-blur-md overflow-hidden shadow-sm">
+      {/* Minimal Top Floating Toolbar */}
+      <div className="border-b border-[var(--border-divider)] px-4 py-3 flex items-center justify-between gap-3 text-xs bg-[var(--surface-elevated)]/80">
+        <div className="text-[var(--text-primary)] truncate font-mono text-[11px] flex items-center gap-2">
+          <BookOpen className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
           <span>{paper.fileName || `${paper.subject}_${paper.year}.pdf`}</span>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Zoom controls */}
-          <div className="flex items-center border border-white/[0.1] rounded-xl bg-[#050914] overflow-hidden">
+          <div className="flex items-center border border-[var(--border-divider)] rounded-lg bg-[var(--surface-main)] overflow-hidden">
             <button
+              type="button"
               onClick={() => handleZoom(-10)}
               disabled={zoomLevel <= 80}
-              className="px-2.5 py-1 text-[#A7B4C8] hover:text-white disabled:opacity-30 transition-colors"
+              className="px-2.5 py-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors cursor-pointer"
               title="Zoom out"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="px-1.5 font-mono text-[11px] text-[#A7B4C8] select-none">{zoomLevel}%</span>
+            <span className="px-1.5 font-mono text-[11px] text-[var(--accent-blue)] font-bold select-none">{zoomLevel}%</span>
             <button
+              type="button"
               onClick={() => handleZoom(10)}
               disabled={zoomLevel >= 130}
-              className="px-2.5 py-1 text-[#A7B4C8] hover:text-white disabled:opacity-30 transition-colors"
+              className="px-2.5 py-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors cursor-pointer"
               title="Zoom in"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -86,8 +83,9 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({ paper, onDownload }) =
 
           {/* Download button */}
           <button
+            type="button"
             onClick={onDownload}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-sm shadow-cyan-500/20 flex items-center gap-1.5"
+            className="px-3.5 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer btn-quad-border"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download</span>
@@ -96,108 +94,62 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({ paper, onDownload }) =
       </div>
 
       {/* Reading Canvas */}
-      <div className="p-4 sm:p-8 overflow-x-auto flex justify-center bg-[#050914]/70">
+      <div className="p-4 sm:p-6 overflow-x-auto flex justify-center bg-black/10 dark:bg-black/30 min-h-[480px]">
         <div
           style={{ width: `${zoomLevel}%`, maxWidth: '820px' }}
-          className="space-y-8 text-[#F8FAFC] transition-all duration-150"
+          className="space-y-6 transition-all duration-150"
         >
-          {/* Document Header */}
-          <div className="border border-white/[0.12] rounded-2xl p-6 bg-[#0A1222] text-center space-y-3 shadow-xl">
-            <div className="text-[11px] font-mono text-cyan-400 tracking-widest uppercase font-semibold">
-              Official Examination Material
-            </div>
-            <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-[#F8FAFC]">
-              {paper.examBoard} — {paper.grade}
-            </h2>
-            <div className="text-sm font-semibold text-[#A7B4C8]">
-              {paper.subject} · Year {paper.year}
-            </div>
-
-            <div className="text-xs text-[#A7B4C8] flex justify-between font-mono border-t border-white/[0.08] pt-3 px-2">
-              <span>Duration: {paper.timeAllowedMinutes / 60} Hours</span>
-              <span>Total Marks: {paper.totalMarks}</span>
-            </div>
-          </div>
-
-          {/* Sections and Questions */}
           {sections.length > 0 ? (
-            <div className="space-y-6">
+            <div className="space-y-4">
+              {/* Header Box */}
+              <div className="border border-[var(--border-divider)] rounded-xl p-5 bg-[var(--surface-main)]/90 backdrop-blur-md text-center space-y-2 shadow-xs">
+                <div className="text-[11px] font-mono text-[var(--accent-blue)] uppercase tracking-wider font-semibold">
+                  Authentic Examination Paper
+                </div>
+                <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+                  {paper.examBoard} — {paper.grade}
+                </h2>
+                <div className="text-xs text-[var(--text-secondary)]">
+                  {paper.subject} · Year {paper.year}
+                </div>
+                <div className="text-xs text-[var(--text-secondary)] flex justify-between font-mono tabular-nums border-t border-[var(--border-divider)] pt-2 px-1">
+                  <span>Duration: {paper.timeAllowedMinutes / 60} Hours</span>
+                  <span className="font-semibold text-[var(--text-primary)]">Total Marks: {paper.totalMarks}</span>
+                </div>
+              </div>
+
               {sections.map((section) => (
-                <div key={section.id} className="space-y-4">
-                  <div className="border-b border-white/[0.08] pb-2 flex items-center justify-between">
+                <div key={section.id} className="space-y-3">
+                  <div className="border-b border-[var(--border-divider)] pb-1.5 flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-xs uppercase tracking-wider text-cyan-300">
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-[var(--text-primary)]">
                         {section.name} — {section.title}
                       </h3>
                       {section.instructions && (
-                        <p className="text-xs text-[#A7B4C8] mt-0.5">{section.instructions}</p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{section.instructions}</p>
                       )}
                     </div>
-                    <span className="font-mono text-xs text-white/60">
+                    <span className="font-mono text-xs text-[var(--accent-green)] font-semibold">
                       {section.totalMarks} Marks
                     </span>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-2.5">
                     {section.questions.map((q) => (
                       <div
                         key={q.id}
-                        className="p-4 sm:p-5 bg-[#0A1222] border border-white/[0.08] hover:border-cyan-400/30 rounded-2xl space-y-3 transition-colors"
+                        className="p-4 bg-[var(--surface-main)]/90 backdrop-blur-md border border-[var(--border-divider)] rounded-xl space-y-2"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-2.5 flex-1">
-                            <span className="font-mono text-xs text-cyan-400 font-bold mt-0.5 shrink-0">
+                            <span className="font-mono text-xs text-[var(--accent-blue)] font-bold shrink-0">
                               Q{q.number}.
                             </span>
-                            <div className="space-y-2.5 flex-1">
-                              <p className="text-sm text-[#F8FAFC] leading-relaxed">
-                                {q.text}
-                              </p>
-
-                              {q.formula && (
-                                <div className="text-xs font-mono bg-[#050914] p-2.5 border border-white/[0.08] rounded-xl text-teal-300">
-                                  {q.formula}
-                                </div>
-                              )}
-
-                              {q.choices && q.choices.length > 0 && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
-                                  {q.choices.map((c) => (
-                                    <div
-                                      key={c.key}
-                                      className="p-2.5 bg-[#101B2D] border border-white/[0.06] rounded-xl flex items-center gap-2 text-[#A7B4C8]"
-                                    >
-                                      <span className="w-5 h-5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 flex items-center justify-center font-mono font-bold text-[10px]">
-                                        {c.key}
-                                      </span>
-                                      <span>{c.text}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {q.solutionHint && (
-                                <div className="pt-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleHint(q.id)}
-                                    className="text-[11px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1.5 transition-colors underline underline-offset-2"
-                                  >
-                                    <HelpCircle className="w-3.5 h-3.5" />
-                                    <span>{revealedHints[q.id] ? 'Hide explanation' : 'Explain answer & solution'}</span>
-                                  </button>
-                                  {revealedHints[q.id] && (
-                                    <div className="mt-2 p-3.5 bg-[#050914] border border-cyan-400/25 rounded-xl text-xs text-[#A7B4C8] leading-relaxed animate-in fade-in duration-150">
-                                      <div className="text-[11px] text-cyan-300 font-semibold mb-1">Solution Breakdown:</div>
-                                      {q.solutionHint}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                            <p className="text-xs sm:text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-line">
+                              {q.text}
+                            </p>
                           </div>
-
-                          <span className="font-mono text-xs text-[#A7B4C8] bg-[#050914] px-2 py-0.5 rounded-lg border border-white/[0.06] shrink-0">
+                          <span className="font-mono text-xs text-[var(--text-secondary)] bg-[var(--surface-secondary)] px-2 py-0.5 rounded-md border border-[var(--border-divider)] shrink-0 font-semibold">
                             [{q.marks}M]
                           </span>
                         </div>
@@ -210,74 +162,79 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({ paper, onDownload }) =
           ) : (
             <div className="space-y-4">
               {loadingSignedUrl ? (
-                <div className="py-16 text-center text-xs text-[#A7B4C8] border border-white/[0.08] rounded-2xl bg-[#0A1222] p-8 space-y-3">
-                  <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p>Resolving secure document link for {paper.fileName}...</p>
+                <div className="py-16 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)]/90 backdrop-blur-md p-8 space-y-3">
+                  <div className="w-5 h-5 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p>Loading document preview...</p>
                 </div>
               ) : signedUrl ? (
                 /\.(png|jpe?g|webp|gif)$/i.test(paper.fileName || paper.fileUrl || '') ? (
-                  <div className="space-y-4">
-                    <div className="border border-white/[0.1] rounded-2xl overflow-hidden bg-[#0A1222] p-3 flex justify-center shadow-xl">
+                  <div className="space-y-3">
+                    <div className="border border-[var(--border-divider)] rounded-xl overflow-hidden bg-[var(--surface-main)]/90 backdrop-blur-md p-2 flex justify-center">
                       <img
                         src={signedUrl}
                         alt={paper.title}
-                        className="max-w-full h-auto rounded-xl object-contain"
+                        className="max-w-full h-auto rounded-lg object-contain"
                       />
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
+                    <div className="flex items-center justify-center gap-2">
                       <a
                         href={signedUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 text-xs font-semibold text-white bg-[#101B2D] hover:bg-[#15233D] border border-white/[0.12] rounded-xl transition-all"
+                        className="px-3.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-lg transition-all flex items-center gap-1.5 btn-quad-border"
                       >
-                        Open Full Image
+                        <span>Open Full Image</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                       </a>
                       <button
+                        type="button"
                         onClick={onDownload}
-                        className="px-4 py-2 text-xs font-semibold text-[#050914] bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl transition-all flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer btn-quad-border"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Download image</span>
+                        <span>Download</span>
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="border border-white/[0.1] rounded-2xl overflow-hidden bg-[#0A1222] shadow-xl">
+                  <div className="space-y-3">
+                    <div className="border border-[var(--border-divider)] rounded-xl overflow-hidden bg-[var(--surface-main)]/90 backdrop-blur-md">
                       <iframe
                         src={`${signedUrl}#toolbar=0`}
                         title={paper.fileName || paper.title}
-                        className="w-full h-[620px] rounded-xl bg-white"
+                        className="w-full h-[620px] rounded-lg bg-white"
                       />
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-3">
+                    <div className="flex items-center justify-center gap-2">
                       <a
                         href={signedUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 text-xs font-semibold text-white bg-[#101B2D] hover:bg-[#15233D] border border-white/[0.12] rounded-xl transition-all"
+                        className="px-3.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-lg transition-all flex items-center gap-1.5 btn-quad-border"
                       >
-                        Open PDF in New Window
+                        <span>Open in New Window</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                       </a>
                       <button
+                        type="button"
                         onClick={onDownload}
-                        className="px-4 py-2 text-xs font-semibold text-[#050914] bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl transition-all flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer btn-quad-border"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Download paper file</span>
+                        <span>Download PDF</span>
                       </button>
                     </div>
                   </div>
                 )
               ) : (
-                <div className="py-12 text-center text-xs text-[#A7B4C8] border border-white/[0.08] rounded-2xl bg-[#0A1222] p-8 space-y-3">
-                  <p>Uploaded document: {paper.fileName}</p>
+                <div className="py-12 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)]/90 backdrop-blur-md p-8 space-y-3">
+                  <p>Document: {paper.fileName}</p>
                   <button
+                    type="button"
                     onClick={onDownload}
-                    className="px-4 py-2 text-xs font-semibold text-[#050914] bg-gradient-to-r from-cyan-500 to-teal-500 rounded-xl transition-all"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-all cursor-pointer btn-quad-border"
                   >
-                    Download paper file
+                    Download File
                   </button>
                 </div>
               )}

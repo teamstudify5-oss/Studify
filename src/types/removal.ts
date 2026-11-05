@@ -1,11 +1,17 @@
 export type RemovalReasonCategory =
   | 'copyright'
-  | 'incorrect_solution'
+  | 'incorrect_content'
   | 'poor_quality'
   | 'duplicate'
-  | 'outdated_syllabus'
+  | 'spam'
+  | 'unsafe_file'
+  | 'privacy_violation'
+  | 'other'
+  | 'incorrect_solution'
   | 'inappropriate'
-  | 'other';
+  | 'outdated_syllabus';
+
+export type ReportCategory = RemovalReasonCategory;
 
 export interface PaperRemovalRequest {
   id: string;
@@ -16,13 +22,18 @@ export interface PaperRemovalRequest {
   paperYear: number;
   uploaderId: string;
   uploaderName: string;
-  uploaderEmail: string;
+  uploaderEmail?: string;
+  reporterId?: string;
   reporterName: string;
   reporterEmail?: string;
   reasonCategory: RemovalReasonCategory;
   reasonDetails: string;
-  status: 'pending' | 'resolved' | 'dismissed' | 'removed';
+  evidenceUrl?: string;
+  status: 'pending' | 'resolved' | 'dismissed' | 'removed' | 'open' | 'actioned';
   createdAt: string;
   resolvedAt?: string;
+  adminDecision?: string;
+  adminNotes?: string;
   uploaderResponse?: string;
 }
+

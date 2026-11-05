@@ -23,9 +23,7 @@ function purgeLegacyWorkspaceData() {
       localStorage.removeItem('studify_workspace_projects_v2');
       localStorage.removeItem('studify_quick_captures_v2');
       localStorage.removeItem('studify_workspace_session_v2');
-      localStorage.removeItem(PROJECTS_STORAGE_KEY);
-      localStorage.removeItem(QUICK_CAPTURES_KEY);
-      localStorage.removeItem(SESSION_STORAGE_KEY);
+      // Bug 13 fix: Do not delete current v3 user data
       localStorage.setItem(LEGACY_WORKSPACE_PURGED, 'true');
     }
   } catch (e) {
@@ -118,6 +116,35 @@ export const workspaceService = {
     supabaseDb.createProject(newProject).catch((e) => console.warn('Supabase createProject failed', e));
 
     return newProject;
+  },
+
+  async createProjectAsync(data: Omit<StudyProject, 'id' | 'createdAt' | 'updatedAt' | 'tasks' | 'notes' | 'resources' | 'paperIds' | 'status'> & {
+    paperIds?: string[];
+    status?: StudyProject['status'];
+  }): Promise<{ project: StudyProject | null; error: Error | null }> {
+    const newProject: StudyProject = {
+      ...data,
+      id: `proj-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      paperIds: data.paperIds || [],
+      tasks: [],
+      notes: [],
+      resources: [],
+      status: 'active'
+    };
+
+    // Await real Supabase operation
+    const result = await supabaseDb.createProject(newProject);
+    if (!result) {
+      return { project: null, error: new Error('Failed to save project in database') };
+    }
+
+    const projects = this.getProjects();
+    projects.unshift(newProject);
+    this.saveProjects(projects);
+
+    return { project: newProject, error: null };
   },
 
   updateProject(id: string, updates: Partial<StudyProject>): StudyProject | null {
@@ -213,24 +240,28 @@ export const workspaceService = {
       // Update existing
       const index = project.notes.findIndex((n) => n.id === noteData.id);
       if (index !== -1) {
+        // Bug 15 fix: Preserve original createdAt timestamp
+        const existingCreatedAt = project.notes[index].createdAt || project.notes[index].updatedAt;
         project.notes[index] = {
           ...project.notes[index],
           title: noteData.title,
           content: noteData.content,
           tags: noteData.tags,
+          createdAt: existingCreatedAt,
           isPinned: noteData.isPinned ?? project.notes[index].isPinned,
           updatedAt: new Date().toISOString()
         };
         this.updateProject(projectId, { notes: project.notes });
 
-        // Real Supabase query for "notes" table
+        // Real Supabase query for "notes" table with preserved createdAt
         supabaseDb.createNote({
           id: noteData.id,
           projectId,
           title: noteData.title,
           content: noteData.content,
           tags: noteData.tags,
-          isPinned: noteData.isPinned
+          isPinned: noteData.isPinned,
+          createdAt: existingCreatedAt
         }).catch((e) => console.warn('Supabase update note failed', e));
 
         window.dispatchEvent(new CustomEvent('studify:notes-updated'));
@@ -239,12 +270,14 @@ export const workspaceService = {
     }
 
     // Create new
+    const nowIso = new Date().toISOString();
     const newNote: ProjectNote = {
       id: `note-${Date.now()}`,
       title: noteData.title || 'Untitled Note',
       content: noteData.content,
       tags: noteData.tags || [],
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
       isPinned: noteData.isPinned || false
     };
     project.notes.unshift(newNote);
@@ -257,11 +290,69 @@ export const workspaceService = {
       title: newNote.title,
       content: newNote.content,
       tags: newNote.tags,
-      isPinned: newNote.isPinned
+      isPinned: newNote.isPinned,
+      createdAt: nowIso
     }).catch((e) => console.warn('Supabase create note failed', e));
 
     window.dispatchEvent(new CustomEvent('studify:notes-updated'));
     return newNote;
+  },
+
+  async saveNoteAsync(projectId: string, noteData: { id?: string; title: string; content: string; tags: string[]; isPinned?: boolean }): Promise<{ note: ProjectNote | null; error: Error | null }> {
+    const project = this.getProjectById(projectId);
+    if (!project) return { note: null, error: new Error('Project not found') };
+
+    const isEdit = Boolean(noteData.id);
+    let noteToSave: ProjectNote;
+    let existingCreatedAt: string | undefined;
+
+    if (isEdit) {
+      const index = project.notes.findIndex((n) => n.id === noteData.id);
+      if (index === -1) return { note: null, error: new Error('Note not found in project') };
+      existingCreatedAt = project.notes[index].createdAt || project.notes[index].updatedAt;
+      noteToSave = {
+        ...project.notes[index],
+        title: noteData.title,
+        content: noteData.content,
+        tags: noteData.tags,
+        createdAt: existingCreatedAt,
+        isPinned: noteData.isPinned ?? project.notes[index].isPinned,
+        updatedAt: new Date().toISOString()
+      };
+      project.notes[index] = noteToSave;
+    } else {
+      const now = new Date().toISOString();
+      noteToSave = {
+        id: `note-${Date.now()}`,
+        title: noteData.title || 'Untitled Note',
+        content: noteData.content,
+        tags: noteData.tags || [],
+        createdAt: now,
+        updatedAt: now,
+        isPinned: noteData.isPinned || false
+      };
+      project.notes.unshift(noteToSave);
+    }
+
+    // Await real Supabase operation
+    const success = await supabaseDb.createNote({
+      id: noteToSave.id,
+      projectId,
+      title: noteToSave.title,
+      content: noteToSave.content,
+      tags: noteToSave.tags,
+      isPinned: noteToSave.isPinned,
+      createdAt: noteToSave.createdAt
+    });
+
+    if (!success) {
+      // Rollback on failure
+      return { note: null, error: new Error('Failed to save note to database') };
+    }
+
+    this.updateProject(projectId, { notes: project.notes });
+    window.dispatchEvent(new CustomEvent('studify:notes-updated'));
+    return { note: noteToSave, error: null };
   },
 
   deleteNote(projectId: string, noteId: string): boolean {
@@ -350,6 +441,37 @@ export const workspaceService = {
     return newItem;
   },
 
+  async addQuickCaptureAsync(data: {
+    title?: string;
+    content: string;
+    type: 'thought' | 'formula' | 'doubt' | 'resource';
+    projectId?: string;
+    tags?: string[];
+  }): Promise<{ item: QuickCaptureItem | null; error: Error | null }> {
+    const newItem: QuickCaptureItem = {
+      id: `qc-${Date.now()}`,
+      title: data.title?.trim() || undefined,
+      content: data.content.trim(),
+      type: data.type,
+      projectId: data.projectId,
+      tags: data.tags || [],
+      createdAt: new Date().toISOString(),
+      isResolved: false
+    };
+
+    // Await real Supabase operation
+    const result = await supabaseDb.createQuickCapture(newItem);
+    if (!result) {
+      return { item: null, error: new Error('Failed to save quick capture to database') };
+    }
+
+    const items = this.getQuickCaptures();
+    items.unshift(newItem);
+    this.saveQuickCaptures(items);
+
+    return { item: newItem, error: null };
+  },
+
   deleteQuickCapture(id: string): boolean {
     const items = this.getQuickCaptures();
     const filtered = items.filter((i) => i.id !== id);
@@ -386,6 +508,10 @@ export const workspaceService = {
     } catch {
       return null;
     }
+  },
+
+  getLastSession(): WorkspaceSession | null {
+    return this.getSession();
   },
 
   recordSessionState(state: Partial<WorkspaceSession>): void {

@@ -6,8 +6,6 @@ import {
   Plus, 
   Trash2, 
   FileText, 
-  Bookmark, 
-  Pin, 
   ExternalLink, 
   Video, 
   Book, 
@@ -15,14 +13,12 @@ import {
   Calendar, 
   Download, 
   Eye, 
-  Sparkles,
-  Share2,
-  FolderPlus
+  FolderPlus,
+  Pin
 } from 'lucide-react';
 import { Paper } from '../../types';
-import { StudyProject, ProjectTask, ProjectNote, ProjectResource } from '../../types/workspace';
+import { StudyProject } from '../../types/workspace';
 import { workspaceService } from '../../services/workspaceService';
-import { AddToProjectModal } from './AddToProjectModal';
 
 interface ProjectWorkspaceViewProps {
   project: StudyProject;
@@ -55,8 +51,7 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
-  const [noteTagInput, setNoteTagInput] = useState('');
-  const [noteTags, setNoteTags] = useState<string[]>([]);
+  const [noteTags] = useState<string[]>([]);
 
   // New resource form state
   const [isAddingResource, setIsAddingResource] = useState(false);
@@ -94,10 +89,10 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   };
 
   // Note actions
-  const handleSaveNote = (e: React.FormEvent) => {
+  const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteContent.trim()) return;
-    workspaceService.saveNote(currentProject.id, {
+    await workspaceService.saveNoteAsync(currentProject.id, {
       title: noteTitle.trim() || 'Study Note',
       content: noteContent.trim(),
       tags: noteTags,
@@ -105,7 +100,6 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
     });
     setNoteTitle('');
     setNoteContent('');
-    setNoteTags([]);
     setIsAddingNote(false);
     refreshProject();
   };
@@ -132,8 +126,8 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
     refreshProject();
   };
 
-  const handleDeleteResource = (resId: string) => {
-    workspaceService.deleteResource(currentProject.id, resId);
+  const handleDeleteResource = (resourceId: string) => {
+    workspaceService.deleteResource(currentProject.id, resourceId);
     refreshProject();
   };
 
@@ -143,10 +137,8 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   };
 
   const attachedPapers = allPapers.filter((p) => currentProject.paperIds.includes(p.id));
-
-  // Progress metrics
-  const totalTasks = currentProject.tasks.length;
   const completedTasks = currentProject.tasks.filter((t) => t.completed).length;
+  const totalTasks = currentProject.tasks.length;
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Export summary
@@ -190,97 +182,103 @@ Generated from Studify Student Workspace.
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       {/* Top Bar: Back & Quick Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-divider)] pb-4">
         <button
+          type="button"
           onClick={onBack}
-          className="flex items-center gap-2 text-xs font-semibold text-[#A7B4C8] hover:text-white transition-colors"
+          className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to All Projects</span>
         </button>
 
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleExportSummary}
-            className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
             title="Export project notes and tasks to text"
           >
-            <Download className="w-3.5 h-3.5 text-cyan-400" />
+            <Download className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
             <span>Export Notes</span>
           </button>
         </div>
       </div>
 
       {/* Project Banner / Card */}
-      <div className="bg-[#0A1222]/90 border border-white/[0.14] rounded-3xl p-5 sm:p-7 relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none" />
-
-        <div className="relative z-10 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs">
-              {currentProject.subject && (
-                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 font-semibold">
-                  {currentProject.subject}
-                </span>
-              )}
-              {currentProject.examBoard && (
-                <span className="text-[#A7B4C8]">· {currentProject.examBoard}</span>
-              )}
-              {currentProject.targetExam && (
-                <span className="text-[#A7B4C8]">· {currentProject.targetExam}</span>
-              )}
-            </div>
-
-            {currentProject.targetDate && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 border border-amber-400/20 px-3 py-1 rounded-full font-mono">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Target: {currentProject.targetDate}</span>
-              </div>
+      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-3.5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+            {currentProject.subject && (
+              <span className="font-semibold text-[var(--accent-blue)]">
+                {currentProject.subject}
+              </span>
+            )}
+            {currentProject.examBoard && (
+              <>
+                <span className="text-[var(--text-muted)] opacity-60">·</span>
+                <span>{currentProject.examBoard}</span>
+              </>
+            )}
+            {currentProject.targetExam && (
+              <>
+                <span className="text-[var(--text-muted)] opacity-60">·</span>
+                <span>{currentProject.targetExam}</span>
+              </>
             )}
           </div>
 
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight">
-              {currentProject.title}
-            </h1>
-            {currentProject.description && (
-              <p className="text-xs sm:text-sm text-[#A7B4C8] mt-1.5 max-w-2xl leading-relaxed">
-                {currentProject.description}
-              </p>
-            )}
-          </div>
+          {currentProject.targetDate && (
+            <div className="flex items-center gap-1 text-xs text-[var(--color-yellow)] font-mono">
+              <Calendar className="w-3 h-3" />
+              <span>Target: {currentProject.targetDate}</span>
+            </div>
+          )}
+        </div>
 
-          {/* Progress Bar */}
-          <div className="pt-2 max-w-md space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-[#A7B4C8]">
-              <span>Milestone Progress</span>
-              <span className="font-mono text-cyan-300 font-bold">{progressPercent}% Completed ({completedTasks}/{totalTasks} tasks)</span>
-            </div>
-            <div className="w-full h-2 rounded-full bg-white/[0.08] overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+            {currentProject.title}
+          </h1>
+          {currentProject.description && (
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-2xl leading-relaxed">
+              {currentProject.description}
+            </p>
+          )}
+        </div>
+
+        {/* Progress Bar */}
+        <div className="pt-1 max-w-md space-y-1">
+          <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+            <span>Milestones</span>
+            <span className="font-mono text-[var(--text-primary)] font-medium">
+              {progressPercent}% completed ({completedTasks}/{totalTasks} tasks)
+            </span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-[var(--surface-secondary)] overflow-hidden">
+            <div
+              className="h-full bg-[var(--accent-blue)] rounded-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
         </div>
       </div>
 
       {/* Tabs Bar */}
-      <div className="flex border-b border-white/[0.1] gap-2 overflow-x-auto pb-1">
+      <div className="flex border-b border-[var(--border-divider)] gap-1 overflow-x-auto pb-1">
         {[
-          { id: 'tasks' as const, label: `Tasks & Milestones (${currentProject.tasks.length})` },
-          { id: 'papers' as const, label: `Attached PYQ Papers (${attachedPapers.length})` },
-          { id: 'notes' as const, label: `Notes & Formula Sheet (${currentProject.notes.length})` },
-          { id: 'resources' as const, label: `Resources & Links (${currentProject.resources.length})` },
+          { id: 'tasks' as const, label: `Tasks (${currentProject.tasks.length})` },
+          { id: 'papers' as const, label: `Attached Papers (${attachedPapers.length})` },
+          { id: 'notes' as const, label: `Notes (${currentProject.notes.length})` },
+          { id: 'resources' as const, label: `Resources (${currentProject.resources.length})` },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-400/30'
-                : 'text-[#A7B4C8] hover:text-white hover:bg-white/[0.05]'
+                ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
             }`}
           >
             {tab.label}
@@ -290,10 +288,10 @@ Generated from Studify Student Workspace.
 
       {/* TAB 1: Tasks */}
       {activeTab === 'tasks' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Add Task Input Form */}
-          <form onSubmit={handleAddTask} className="p-4 rounded-2xl bg-[#101B2D]/80 border border-white/[0.1] space-y-3">
-            <div className="text-xs font-semibold text-white">Add Study Milestone or Practice Goal</div>
+          <form onSubmit={handleAddTask} className="p-3.5 sm:p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] space-y-2.5 shadow-xs">
+            <div className="text-xs font-medium text-[var(--text-primary)]">Add Study Milestone or Task</div>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
@@ -301,31 +299,31 @@ Generated from Studify Student Workspace.
                 placeholder="e.g. Solve Section C numericals from 2024 paper..."
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
-                className="flex-1 px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-cyan-400"
+                className="flex-1 px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               />
               <div className="flex gap-2">
                 <select
                   value={newTaskPriority}
                   onChange={(e) => setNewTaskPriority(e.target.value as any)}
-                  className="px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none"
+                  className="px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none"
                 >
-                  <option value="high">High Priority</option>
-                  <option value="medium">Medium Priority</option>
-                  <option value="low">Low Priority</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
                 </select>
                 <input
                   type="text"
-                  placeholder="Due (e.g. Friday)"
+                  placeholder="Due date"
                   value={newTaskDueDate}
                   onChange={(e) => setNewTaskDueDate(e.target.value)}
-                  className="w-28 px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white placeholder-white/40 focus:outline-none"
+                  className="w-24 px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 text-[#050914] text-xs font-bold rounded-xl hover:from-cyan-400 hover:to-teal-400 transition-all shrink-0 flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1 cursor-pointer btn-quad-border"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Task</span>
+                  <span>Add</span>
                 </button>
               </div>
             </div>
@@ -334,51 +332,51 @@ Generated from Studify Student Workspace.
           {/* Task List */}
           <div className="space-y-2">
             {currentProject.tasks.length === 0 ? (
-              <div className="p-8 text-center bg-[#101B2D]/40 border border-white/[0.08] rounded-2xl text-xs text-[#A7B4C8]">
-                No tasks added yet. Add study goals above to track your progress!
+              <div className="p-8 text-center bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)]">
+                No tasks added yet. Add study goals above to track your progress.
               </div>
             ) : (
               currentProject.tasks.map((task) => (
                 <div
                   key={task.id}
-                  className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                  className={`p-3 rounded-xl border transition-colors flex items-center justify-between gap-3 ${
                     task.completed
-                      ? 'bg-white/[0.02] border-white/[0.06] text-[#A7B4C8]'
-                      : 'bg-[#101B2D]/80 border-white/[0.1] text-white hover:border-cyan-500/30'
+                      ? 'bg-[var(--surface-secondary)]/40 border-[var(--border-divider)] text-[var(--text-muted)]'
+                      : 'bg-[var(--surface-main)]/85 backdrop-blur-md border-[var(--border-divider)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <button
                       type="button"
                       onClick={() => handleToggleTask(task.id)}
-                      className="cursor-pointer shrink-0 text-cyan-400 hover:scale-110 transition-transform"
+                      className="cursor-pointer shrink-0 text-[var(--accent-blue)]"
                     >
                       {task.completed ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        <CheckCircle2 className="w-4 h-4 text-[var(--color-green)]" />
                       ) : (
-                        <Circle className="w-5 h-5 text-[#A7B4C8]" />
+                        <Circle className="w-4 h-4 text-[var(--text-muted)]" />
                       )}
                     </button>
-                    <span className={`text-xs sm:text-sm font-medium ${task.completed ? 'line-through text-[#A7B4C8]/70' : 'text-white'}`}>
+                    <span className={`text-xs font-medium ${task.completed ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                       {task.title}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold uppercase ${
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-mono uppercase ${
                         task.priority === 'high'
-                          ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                          ? 'bg-[var(--accent-red-bg)] text-[var(--color-red)]'
                           : task.priority === 'medium'
-                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                          : 'bg-white/[0.06] text-[#A7B4C8]'
+                          ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)]'
+                          : 'bg-[var(--surface-elevated)] text-[var(--text-muted)]'
                       }`}
                     >
                       {task.priority}
                     </span>
 
                     {task.dueDate && (
-                      <span className="text-[11px] text-[#A7B4C8] hidden sm:inline">
+                      <span className="text-[10px] text-[var(--text-muted)] font-mono hidden sm:inline">
                         {task.dueDate}
                       </span>
                     )}
@@ -386,7 +384,7 @@ Generated from Studify Student Workspace.
                     <button
                       type="button"
                       onClick={() => handleDeleteTask(task.id)}
-                      className="p-1 rounded-lg text-[#A7B4C8] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
                       title="Delete task"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -403,28 +401,30 @@ Generated from Studify Student Workspace.
       {activeTab === 'papers' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#A7B4C8]">
-              Previous year question papers attached specifically to this study project for revision and timed practice.
+            <p className="text-xs text-[var(--text-secondary)]">
+              Previous year question papers attached specifically to this study project.
             </p>
             <button
+              type="button"
               onClick={onAttachMorePapers}
-              className="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
             >
               <FolderPlus className="w-3.5 h-3.5" />
-              <span>Browse & Attach Papers</span>
+              <span>Browse & Attach</span>
             </button>
           </div>
 
           {attachedPapers.length === 0 ? (
-            <div className="p-12 text-center bg-[#101B2D]/40 border border-white/[0.08] rounded-2xl space-y-3">
-              <FileText className="w-8 h-8 text-[#A7B4C8] mx-auto" />
-              <div className="text-sm font-semibold text-white">No papers attached yet</div>
-              <p className="text-xs text-[#A7B4C8] max-w-sm mx-auto">
+            <div className="p-10 text-center bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl space-y-3">
+              <FileText className="w-7 h-7 text-[var(--text-muted)] mx-auto" />
+              <div className="text-sm font-semibold text-[var(--text-primary)]">No papers attached yet</div>
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
                 Explore the public Studify PYQ library and click "Add to Project" on any paper to attach it here.
               </p>
               <button
+                type="button"
                 onClick={onAttachMorePapers}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 text-[#050914] text-xs font-bold rounded-xl"
+                className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg cursor-pointer btn-quad-border"
               >
                 Explore PYQ Library
               </button>
@@ -434,38 +434,43 @@ Generated from Studify Student Workspace.
               {attachedPapers.map((paper) => (
                 <div
                   key={paper.id}
-                  className="p-4 rounded-2xl bg-[#101B2D]/80 border border-white/[0.12] hover:border-cyan-500/30 transition-all flex flex-col justify-between space-y-3"
+                  className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] hover:border-[var(--border-hover)] transition-all flex flex-col justify-between space-y-3 shadow-xs"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-[#A7B4C8]">
-                      <span className="font-semibold text-cyan-400">{paper.examBoard} · {paper.grade}</span>
-                      <span className="font-mono text-white/60">{paper.year}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                      <span className="font-semibold text-[var(--accent-blue)]">{paper.examBoard} · {paper.grade}</span>
+                      <span className="font-mono text-[var(--text-muted)]">{paper.year}</span>
                     </div>
-                    <h3 className="text-sm font-bold text-white line-clamp-2">{paper.title}</h3>
-                    <p className="text-xs text-[#A7B4C8] line-clamp-1">{paper.totalMarks} Marks · {paper.subject}</p>
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] line-clamp-1">{paper.title}</h3>
+                    <p className="text-xs text-[var(--text-muted)] line-clamp-1">{paper.totalMarks} Marks · {paper.subject}</p>
                   </div>
 
-                  <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2">
+                  <div className="pt-2.5 border-t border-[var(--border-divider)] flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={() => onSelectPaper(paper)}
-                        className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/30 text-xs font-semibold rounded-xl flex items-center gap-1.5"
+                        className="px-2.5 py-1 bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors cursor-pointer btn-quad-border"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>Practice / View</span>
+                        <span>View</span>
                       </button>
-                      <button
-                        onClick={(e) => onDownloadPaper(paper, e)}
-                        className="p-1.5 bg-white/[0.06] hover:bg-white/[0.1] text-white rounded-xl"
-                        title="Download Paper"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
+                      {onDownloadPaper && (
+                        <button
+                          type="button"
+                          onClick={(e) => onDownloadPaper(paper, e)}
+                          className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer btn-quad-border"
+                          title="Download Paper"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => handleRemovePaper(paper.id)}
-                      className="text-xs text-[#A7B4C8] hover:text-rose-400 p-1"
+                      className="text-xs text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
                       title="Detach from project"
                     >
                       Remove
@@ -482,12 +487,13 @@ Generated from Studify Student Workspace.
       {activeTab === 'notes' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#A7B4C8]">
-              Your dedicated project scratchpad, formula cheat sheet, and revision notes.
+            <p className="text-xs text-[var(--text-secondary)]">
+              Your dedicated project scratchpad, formula cheat sheet, and notes.
             </p>
             <button
+              type="button"
               onClick={() => setIsAddingNote(!isAddingNote)}
-              className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 text-xs font-semibold flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>{isAddingNote ? 'Cancel' : 'New Note'}</span>
@@ -495,34 +501,34 @@ Generated from Studify Student Workspace.
           </div>
 
           {isAddingNote && (
-            <form onSubmit={handleSaveNote} className="p-4 sm:p-5 rounded-2xl bg-[#101B2D] border border-cyan-500/40 space-y-3.5 animate-in fade-in">
-              <div className="text-xs font-bold text-white">Create New Study Note / Formula Sheet</div>
+            <form onSubmit={handleSaveNote} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3 shadow-xs">
+              <div className="text-xs font-semibold text-[var(--text-primary)]">Create Study Note</div>
               <input
                 type="text"
                 placeholder="Note Title (e.g. Ray Optics Formulas)"
                 value={noteTitle}
                 onChange={(e) => setNoteTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400"
+                className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               />
               <textarea
                 required
-                rows={5}
+                rows={4}
                 placeholder="Write your study notes, derivations, formulae, or key conceptual bullet points..."
                 value={noteContent}
                 onChange={(e) => setNoteContent(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
+                className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
               />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddingNote(false)}
-                  className="px-3 py-1.5 text-xs text-[#A7B4C8] hover:text-white"
+                  className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer btn-quad-border"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 text-[#050914] text-xs font-bold rounded-xl"
+                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer btn-quad-border"
                 >
                   Save Note
                 </button>
@@ -534,30 +540,31 @@ Generated from Studify Student Workspace.
             {currentProject.notes.map((note) => (
               <div
                 key={note.id}
-                className="p-4 sm:p-5 rounded-2xl bg-[#101B2D]/80 border border-white/[0.12] space-y-3 relative group"
+                className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-2.5 shadow-xs"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {note.isPinned && <Pin className="w-3.5 h-3.5 text-cyan-400 fill-cyan-400" />}
-                    <h4 className="text-sm font-bold text-white">{note.title}</h4>
+                  <div className="flex items-center gap-1.5">
+                    {note.isPinned && <Pin className="w-3.5 h-3.5 text-[var(--accent-blue)] fill-current" />}
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">{note.title}</h4>
                   </div>
                   <button
+                    type="button"
                     onClick={() => handleDeleteNote(note.id)}
-                    className="text-[#A7B4C8] hover:text-rose-400 transition-colors"
+                    className="text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
                     title="Delete note"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <div className="text-xs text-[#E2E8F0] whitespace-pre-wrap leading-relaxed font-sans bg-[#0A1222]/60 p-3 rounded-xl border border-white/[0.04]">
+                <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed bg-[var(--surface-secondary)]/50 p-2.5 rounded-lg border border-[var(--border-divider)]">
                   {note.content}
                 </div>
 
                 {note.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1 pt-1">
                     {note.tags.map((t) => (
-                      <span key={t} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.05] text-[#A7B4C8]">
+                      <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
                         #{t}
                       </span>
                     ))}
@@ -573,12 +580,13 @@ Generated from Studify Student Workspace.
       {activeTab === 'resources' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#A7B4C8]">
-              Textbooks, video lectures, drive links, and external reference materials.
+            <p className="text-xs text-[var(--text-secondary)]">
+              Reference materials, textbooks, videos, and external links.
             </p>
             <button
+              type="button"
               onClick={() => setIsAddingResource(!isAddingResource)}
-              className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 text-xs font-semibold flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>{isAddingResource ? 'Cancel' : 'Add Resource'}</span>
@@ -586,8 +594,8 @@ Generated from Studify Student Workspace.
           </div>
 
           {isAddingResource && (
-            <form onSubmit={handleAddResource} className="p-4 sm:p-5 rounded-2xl bg-[#101B2D] border border-cyan-500/40 space-y-3.5 animate-in fade-in">
-              <div className="text-xs font-bold text-white">Add External Study Resource</div>
+            <form onSubmit={handleAddResource} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3 shadow-xs">
+              <div className="text-xs font-semibold text-[var(--text-primary)]">Add Study Resource</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
@@ -595,12 +603,12 @@ Generated from Studify Student Workspace.
                   placeholder="Resource Title (e.g. NCERT Official Physics PDF)"
                   value={resTitle}
                   onChange={(e) => setResTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
                 />
                 <select
                   value={resType}
                   onChange={(e) => setResType(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none"
                 >
                   <option value="link">Web Link</option>
                   <option value="video">Video Lecture</option>
@@ -615,7 +623,7 @@ Generated from Studify Student Workspace.
                 placeholder="https://..."
                 value={resUrl}
                 onChange={(e) => setResUrl(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400"
+                className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               />
 
               <input
@@ -623,20 +631,20 @@ Generated from Studify Student Workspace.
                 placeholder="Annotation / note (e.g. Chapter 9 & 10 are most important)"
                 value={resNotes}
                 onChange={(e) => setResNotes(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0A1222] border border-white/[0.14] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400"
+                className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               />
 
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddingResource(false)}
-                  className="px-3 py-1.5 text-xs text-[#A7B4C8] hover:text-white"
+                  className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer btn-quad-border"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 text-[#050914] text-xs font-bold rounded-xl"
+                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer btn-quad-border"
                 >
                   Save Resource
                 </button>
@@ -646,22 +654,22 @@ Generated from Studify Student Workspace.
 
           <div className="space-y-2">
             {currentProject.resources.length === 0 ? (
-              <div className="p-8 text-center bg-[#101B2D]/40 border border-white/[0.08] rounded-2xl text-xs text-[#A7B4C8]">
+              <div className="p-8 text-center bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)]">
                 No external resources added yet. Add YouTube lectures, NCERT links, or Drive folders.
               </div>
             ) : (
               currentProject.resources.map((res) => (
                 <div
                   key={res.id}
-                  className="p-3.5 rounded-2xl bg-[#101B2D]/80 border border-white/[0.1] flex items-center justify-between gap-3 hover:border-cyan-400/30 transition-all"
+                  className="p-3 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] flex items-center justify-between gap-3 hover:border-[var(--border-hover)] transition-colors shadow-xs"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-white/[0.05] text-cyan-400 flex items-center justify-center shrink-0">
-                      {res.type === 'video' ? <Video className="w-4 h-4" /> : res.type === 'book' ? <Book className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-[var(--surface-elevated)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
+                      {res.type === 'video' ? <Video className="w-3.5 h-3.5" /> : res.type === 'book' ? <Book className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-white truncate">{res.title}</div>
-                      {res.notes && <div className="text-[11px] text-[#A7B4C8] truncate">{res.notes}</div>}
+                      <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{res.title}</div>
+                      {res.notes && <div className="text-[11px] text-[var(--text-muted)] truncate">{res.notes}</div>}
                     </div>
                   </div>
 
@@ -670,15 +678,17 @@ Generated from Studify Student Workspace.
                       href={res.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-xs font-medium text-cyan-300 flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-medium text-[var(--accent-blue)] flex items-center gap-1 transition-colors btn-quad-border"
                     >
                       <span>Open</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                     <button
+                      type="button"
                       onClick={() => handleDeleteResource(res.id)}
-                      className="p-1 text-[#A7B4C8] hover:text-rose-400 transition-colors"
+                      className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
                       title="Delete resource"
+                      aria-label="Delete resource"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

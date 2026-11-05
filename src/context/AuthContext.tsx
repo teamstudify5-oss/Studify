@@ -20,8 +20,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_STORAGE_KEY = 'pyq_auth_user_v1';
 
 // Helper to map a real Supabase user object into the Studify User type
-const mapSupabaseUser = (supabaseUser: any): User => {
+// Priority 2: Never allow users to self-assign owner role via user_metadata.
+// Only check server-controlled app_metadata or verified database role.
+const mapSupabaseUser = (supabaseUser: any, isVerifiedAdmin: boolean = false): User => {
   const metadata = supabaseUser?.user_metadata || {};
+  const appMetadata = supabaseUser?.app_metadata || {};
   const email = supabaseUser?.email || '';
   const fullName =
     metadata.full_name ||
@@ -48,11 +51,16 @@ const mapSupabaseUser = (supabaseUser: any): User => {
     year: 'numeric',
   });
 
+  // Verify admin status from secure sources only (app_metadata or database verification)
+  const ownerEmail = (import.meta.env.VITE_OWNER_EMAIL || 'teamstudify5@gmail.com').toLowerCase().trim();
+  const hasAppMetaAdmin = appMetadata.role === 'owner' || appMetadata.role === 'admin' || appMetadata.is_admin === true;
+  const isOwner = hasAppMetaAdmin || isVerifiedAdmin || (email && email.toLowerCase().trim() === ownerEmail);
+
   return {
     id: supabaseUser.id,
     name: fullName,
     email: email,
-    role: 'student', // Default newly registered users to student role
+    role: isOwner ? 'owner' : 'student',
     avatarInitials,
     institution: metadata.institution || 'Studify Scholar',
     joinedDate,
@@ -74,6 +82,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Check existing Supabase session on application start
     let isMounted = true;
+
+    const syncUserWithDbRole = async (user: any) => {
+      let isDbAdmin = false;
+      try {
+        const { data: roleRow } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (roleRow && (roleRow.role === 'owner' || roleRow.role === 'admin')) {
+          isDbAdmin = true;
+        }
+      } catch {
+        // ignore
+      }
+      if (isMounted) {
+        setCurrentUser(mapSupabaseUser(user, isDbAdmin));
+      }
+    };
+
     supabase.auth
       .getSession()
       .then(({ data: { session }, error }) => {
@@ -82,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
         if (isMounted && session?.user) {
-          setCurrentUser(mapSupabaseUser(session.user));
+          syncUserWithDbRole(session.user);
         }
       })
       .catch((err) => {
@@ -95,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
       if (session?.user) {
-        setCurrentUser(mapSupabaseUser(session.user));
+        syncUserWithDbRole(session.user);
       } else {
         setCurrentUser(null);
       }

@@ -157,19 +157,10 @@ export const SignIn: React.FC<SignInProps> = ({
 
   return (
     <div
-      className={`w-full max-w-md mx-auto bg-[#101B2D]/95 border border-white/[0.14] rounded-3xl p-6 sm:p-8 text-[#F8FAFC] shadow-2xl shadow-cyan-950/40 relative overflow-hidden backdrop-blur-xl ${
-        isModal ? '' : 'my-8 sm:my-12'
+      className={`w-full max-w-md mx-auto bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-6 sm:p-7 text-[var(--text-primary)] shadow-lg relative overflow-hidden ${
+        isModal ? '' : 'my-6 sm:my-10'
       }`}
     >
-      {/* Subtle Ambient Decorative Lighting */}
-      <div
-        className="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute -bottom-16 -right-16 w-56 h-56 rounded-full bg-teal-500/10 blur-3xl pointer-events-none"
-        aria-hidden="true"
-      />
 
       {/* Studify Branding Header */}
       <div className="text-center space-y-3 relative z-10 mb-6">
@@ -318,9 +309,9 @@ export const SignIn: React.FC<SignInProps> = ({
         )}
 
         {/* Divider */}
-        <div className="relative my-4 flex items-center justify-center">
-          <div className="w-full border-t border-white/[0.08]" aria-hidden="true" />
-          <span className="bg-[#101B2D] px-3 text-[11px] font-mono text-[#A7B4C8] uppercase tracking-wider relative z-10">
+        <div className="relative my-3 flex items-center justify-center">
+          <div className="w-full border-t border-[var(--border-divider)]" aria-hidden="true" />
+          <span className="bg-[var(--surface-main)] px-2.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider relative z-10">
             or continue with
           </span>
         </div>
@@ -329,7 +320,7 @@ export const SignIn: React.FC<SignInProps> = ({
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="w-full py-2.5 px-4 bg-[#0A1222] hover:bg-[#15233D] border border-white/[0.12] hover:border-white/[0.2] text-[#F8FAFC] text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+          className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
             <path

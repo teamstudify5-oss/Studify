@@ -115,14 +115,18 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     <div 
       className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/80 backdrop-blur-md animate-in fade-in"
       onClick={onClose}
+      role="presentation"
     >
       <div
-        className="w-full max-w-2xl bg-[#0A1222] border border-white/[0.16] rounded-2xl shadow-2xl shadow-cyan-950/60 overflow-hidden flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command search palette"
+        className="w-full max-w-2xl bg-[#2D3741] border border-[#46535F] rounded-2xl shadow-2xl overflow-hidden flex flex-col text-[#EDF2F5]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <div className="p-3.5 sm:p-4 border-b border-white/[0.1] flex items-center gap-3 bg-[#0d1627]">
-          <Search className="w-5 h-5 text-cyan-400 shrink-0" />
+        <div className="p-3.5 sm:p-4 border-b border-[#46535F] flex items-center gap-3 bg-[#252D36]">
+          <Search className="w-5 h-5 text-[#72A8F5] shrink-0" />
           <input
             ref={inputRef}
             type="text"

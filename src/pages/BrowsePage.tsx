@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, RotateCcw, SlidersHorizontal, FileText, CheckCircle2 } from 'lucide-react';
+import { Search, RotateCcw, SlidersHorizontal, FileText } from 'lucide-react';
 import { Paper, FilterState } from '../types';
 import { PaperCard } from '../components/PaperCard';
 import { EXAM_BOARDS, GRADE_LEVELS, POPULAR_SUBJECTS, YEARS } from '../data/samplePapers';
@@ -22,7 +22,11 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
   onBookmarkPaper,
   savedPaperIds,
 }) => {
-  const approvedPapers = useMemo(() => papers.filter((p) => p.status === 'approved'), [papers]);
+  // Active papers are immediately visible to anyone
+  const visiblePapers = useMemo(
+    () => papers.filter((p) => p.status === 'active' || p.status === 'approved'),
+    [papers]
+  );
 
   const [searchQuery, setSearchQuery] = useState(initialFilters?.search || initialFilters?.searchQuery || '');
   const [selectedBoard, setSelectedBoard] = useState(initialFilters?.board || 'all');
@@ -31,10 +35,9 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
   const [selectedYear, setSelectedYear] = useState(initialFilters?.year || 'all');
   const [sortBy, setSortBy] = useState<'latest' | 'popular' | 'rating' | 'yearDesc' | 'yearAsc'>('latest');
   const [selectedPaperForProject, setSelectedPaperForProject] = useState<Paper | null>(null);
-  const [projectToast, setProjectToast] = useState<string | null>(null);
 
   const filteredPapers = useMemo(() => {
-    return approvedPapers
+    return visiblePapers
       .filter((paper) => {
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
@@ -86,7 +89,7 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
         }
         return 0;
       });
-  }, [approvedPapers, searchQuery, selectedBoard, selectedGrade, selectedSubject, selectedYear, sortBy]);
+  }, [visiblePapers, searchQuery, selectedBoard, selectedGrade, selectedSubject, selectedYear, sortBy]);
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
@@ -105,74 +108,94 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
-      {/* Search Header */}
-      <div className="space-y-2 text-center sm:text-left">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight">
-          Find Your Next Question Paper
-        </h1>
-        <p className="text-xs sm:text-sm text-[#A7B4C8]">
-          Search past papers and discover resources for your preparation.
-        </p>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      {/* Header — Clean, minimal, no standalone emblem or motto banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 shadow-xs">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+              Community PYQ Library
+            </h1>
+            <span className="text-[11px] font-medium text-[var(--color-green)]">
+              Verified
+            </span>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Search, preview, and download authentic past examination papers. Completely free.
+          </p>
+        </div>
+
+        <div className="text-xs text-[var(--text-muted)] font-mono sm:text-right shrink-0">
+          Open Repository
+        </div>
       </div>
 
-      {/* Prominent Search Bar */}
+      {/* Modern Search Bar */}
       <form
         onSubmit={(e) => e.preventDefault()}
-        className="relative flex items-center bg-[#101B2D]/85 backdrop-blur-xl border border-white/[0.14] rounded-2xl p-2 sm:p-2.5 shadow-2xl shadow-cyan-950/20 focus-within:border-cyan-400/50 transition-all"
+        className="relative flex items-center bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-1.5 shadow-xs focus-within:border-[var(--accent-blue)] focus-within:ring-1 focus-within:ring-[var(--accent-blue)]/30 transition-all"
       >
-        <Search className="w-5 h-5 text-cyan-400 ml-3 shrink-0" />
+        <Search className="w-4 h-4 text-[var(--text-muted)] ml-3 shrink-0" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by subject, exam, class, year, or keyword..."
-          className="w-full px-3 py-2 text-sm text-[#F8FAFC] placeholder-[#A7B4C8]/60 bg-transparent focus:outline-none"
+          placeholder="Search by subject, examination board, class, year, or chapter..."
+          className="w-full px-3 py-2 text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] bg-transparent focus:outline-none"
         />
         {searchQuery && (
           <button
             type="button"
             onClick={() => setSearchQuery('')}
-            className="text-xs text-[#A7B4C8] hover:text-white px-2 py-1 mr-2"
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2.5 py-1 mr-2 cursor-pointer transition-colors rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
           >
             Clear
           </button>
         )}
-        <button
-          type="submit"
-          className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/20 shrink-0"
-        >
-          Search
-        </button>
       </form>
 
-      {/* Visually Consistent Filter Deck */}
-      <div className="bg-[#101B2D]/80 backdrop-blur-md border border-white/[0.12] rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div>
-            <label className="block text-[11px] font-mono uppercase text-[#A7B4C8] mb-1.5 font-medium">
-              Subject
-            </label>
-            <select
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full p-2.5 bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-cyan-400 text-xs"
+      {/* Filter Deck */}
+      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-4 sm:p-5 shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+            <span>Filter Archive</span>
+          </div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs text-[var(--accent-blue)] hover:underline font-medium flex items-center gap-1 cursor-pointer"
             >
-              <option value="all">All Subjects</option>
-              {POPULAR_SUBJECTS.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset filters</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Exam Board */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-[var(--text-secondary)]">Exam Board</label>
+            <select
+              value={selectedBoard}
+              onChange={(e) => setSelectedBoard(e.target.value)}
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-[var(--border-hover)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-medium focus:outline-none focus:border-[var(--accent-blue)] transition-colors"
+            >
+              <option value="all">All Boards</option>
+              {EXAM_BOARDS.map((board) => (
+                <option key={board} value={board}>{board}</option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-mono uppercase text-[#A7B4C8] mb-1.5 font-medium">
-              Class / Grade
-            </label>
+          {/* Grade */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-[var(--text-secondary)]">Class / Level</label>
             <select
               value={selectedGrade}
               onChange={(e) => setSelectedGrade(e.target.value)}
-              className="w-full p-2.5 bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-cyan-400 text-xs"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-[var(--border-hover)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-medium focus:outline-none focus:border-[var(--accent-blue)] transition-colors"
             >
               <option value="all">All Classes</option>
               {GRADE_LEVELS.map((g) => (
@@ -181,30 +204,28 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
             </select>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-mono uppercase text-[#A7B4C8] mb-1.5 font-medium">
-              Exam Name
-            </label>
+          {/* Subject */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-[var(--text-secondary)]">Subject</label>
             <select
-              value={selectedBoard}
-              onChange={(e) => setSelectedBoard(e.target.value)}
-              className="w-full p-2.5 bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-cyan-400 text-xs"
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-[var(--border-hover)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-medium focus:outline-none focus:border-[var(--accent-blue)] transition-colors"
             >
-              <option value="all">All Exams</option>
-              {EXAM_BOARDS.map((b) => (
-                <option key={b} value={b}>{b}</option>
+              <option value="all">All Subjects</option>
+              {POPULAR_SUBJECTS.map((s) => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-mono uppercase text-[#A7B4C8] mb-1.5 font-medium">
-              Year
-            </label>
+          {/* Year */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-[var(--text-secondary)]">Year</label>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-full p-2.5 bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-cyan-400 text-xs"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-[var(--border-hover)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-medium focus:outline-none focus:border-[var(--accent-blue)] transition-colors"
             >
               <option value="all">All Years</option>
               {YEARS.map((y) => (
@@ -213,92 +234,73 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
             </select>
           </div>
         </div>
+      </div>
 
-        {/* Sort & Reset Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-white/[0.08] text-xs">
-          <div className="flex items-center gap-2 text-[#A7B4C8]">
-            <span>Showing <strong className="text-white">{filteredPapers.length}</strong> available papers</span>
-            <span className="text-white/20">·</span>
-            <span className="text-[11px]">Sort:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-transparent font-medium text-cyan-300 focus:outline-none cursor-pointer text-xs"
-            >
-              <option value="latest" className="bg-[#0A1222]">Latest Added</option>
-              <option value="popular" className="bg-[#0A1222]">Most Downloaded</option>
-              <option value="rating" className="bg-[#0A1222]">Highest Rated</option>
-              <option value="yearDesc" className="bg-[#0A1222]">Newest Year</option>
-              <option value="yearAsc" className="bg-[#0A1222]">Oldest Year</option>
-            </select>
-          </div>
-
-          {hasActiveFilters && (
-            <button
-              onClick={resetFilters}
-              className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Filters</span>
-            </button>
-          )}
+      {/* Results Header */}
+      <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+        <span>
+          Showing <strong className="font-semibold text-[var(--text-primary)] font-mono tabular-nums">{filteredPapers.length}</strong> {filteredPapers.length === 1 ? 'paper' : 'papers'}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span>Sort by:</span>
+          <select
+            value={sortBy}
+            onChange={(e: any) => setSortBy(e.target.value)}
+            className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] font-medium focus:outline-none focus:border-[var(--accent-blue)]"
+          >
+            <option value="latest">Recently Added</option>
+            <option value="popular">Most Downloaded</option>
+            <option value="rating">Top Rated</option>
+            <option value="yearDesc">Year: Newest First</option>
+            <option value="yearAsc">Year: Oldest First</option>
+          </select>
         </div>
       </div>
 
-      {/* Responsive Grid of Document Cards */}
-      <div className="space-y-4">
-        {filteredPapers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredPapers.map((paper) => (
-              <PaperCard
-                key={paper.id}
-                paper={paper}
-                onSelect={onSelectPaper}
-                onDownload={onDownloadPaper}
-                onBookmark={onBookmarkPaper}
-                onAddToProject={(p) => setSelectedPaperForProject(p)}
-                isBookmarked={savedPaperIds.includes(paper.id)}
-              />
-            ))}
+      {/* Paper Grid */}
+      {filteredPapers.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {filteredPapers.map((paper) => (
+            <PaperCard
+              key={paper.id}
+              paper={paper}
+              onSelect={onSelectPaper}
+              onDownload={onDownloadPaper}
+              onBookmark={onBookmarkPaper}
+              onAddToProject={(p) => setSelectedPaperForProject(p)}
+              isBookmarked={savedPaperIds.includes(paper.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-12 text-center space-y-3 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-[var(--surface-elevated)] flex items-center justify-center mx-auto text-[var(--text-muted)]">
+            <FileText className="w-5 h-5" />
           </div>
-        ) : (
-          <div className="py-16 text-center text-xs text-[#A7B4C8] border border-white/[0.12] rounded-3xl bg-[#101B2D]/70 backdrop-blur-md p-8 space-y-3">
-            <FileText className="w-12 h-12 text-[#A7B4C8]/40 mx-auto" />
-            <h3 className="text-base font-bold text-[#F8FAFC]">No question papers found</h3>
-            <p className="max-w-sm mx-auto">
-              We couldn't find any papers matching your query. Try broadening your keywords or clearing the active filters.
-            </p>
-            {hasActiveFilters && (
-              <button
-                onClick={resetFilters}
-                className="mt-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 text-[#050914] text-xs font-bold rounded-xl"
-              >
-                Reset All Filters
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">No question papers found</h3>
+          <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+            Try adjusting your search query or reset the filters to discover available papers.
+          </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="px-4 py-1.5 bg-[var(--accent-blue)] text-white font-semibold text-xs rounded-lg transition-all shadow-xs cursor-pointer btn-quad-border"
+            >
+              Reset all filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Add To Project Modal */}
       {selectedPaperForProject && (
         <AddToProjectModal
-          paper={selectedPaperForProject}
-          isOpen={!!selectedPaperForProject}
+          isOpen={true}
           onClose={() => setSelectedPaperForProject(null)}
-          onSuccess={(projName) => {
-            setProjectToast(`Paper attached to ${projName}`);
-            setTimeout(() => setProjectToast(null), 3000);
-          }}
+          paper={selectedPaperForProject}
+          onSuccess={() => setSelectedPaperForProject(null)}
         />
-      )}
-
-      {/* Project Toast */}
-      {projectToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#101B2D] text-[#F8FAFC] border border-white/[0.14] text-xs px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-in fade-in">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span>{projectToast}</span>
-        </div>
       )}
     </div>
   );

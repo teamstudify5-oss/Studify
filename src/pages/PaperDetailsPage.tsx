@@ -4,21 +4,17 @@ import {
   Download, 
   Clock, 
   Award, 
-  BookOpen, 
   Star, 
   Bookmark, 
-  Share2, 
-  MessageSquare, 
   Send, 
-  User, 
   CheckCircle2, 
-  Sparkles,
-  ArrowRight,
-  FolderPlus,
-  ShieldAlert,
-  Flag,
-  Edit2,
-  Trash2
+  ArrowRight, 
+  FolderPlus, 
+  ShieldAlert, 
+  Flag, 
+  Edit2, 
+  Trash2,
+  MessageSquare
 } from 'lucide-react';
 import { Paper } from '../types';
 import { PaperViewer } from '../components/PaperViewer';
@@ -29,6 +25,7 @@ import { AddToProjectModal } from '../components/workspace/AddToProjectModal';
 import { ReportRemovalModal } from '../components/ReportRemovalModal';
 import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
 import { communityPyqService } from '../services/communityPyqService';
+import { supabaseDb } from '../services/supabaseDb';
 
 interface PaperDetailsPageProps {
   paper: Paper;
@@ -54,13 +51,16 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   const { currentUser, isAuthenticated } = useAuth();
   const [currentPaper, setCurrentPaper] = useState<Paper>(paper);
 
-  // Ratings & reviews state (no login required)
+  // Ratings & reviews state
   const [selectedStars, setSelectedStars] = useState<number>(5);
   const [reviewText, setReviewText] = useState<string>('');
   const [reviewerName, setReviewerName] = useState<string>(currentUser?.name || '');
   const [reviewSubmitted, setReviewSubmitted] = useState<boolean>(false);
+  const [hasExistingUserRating, setHasExistingUserRating] = useState<boolean>(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+  const [, setRatingError] = useState<string | null>(null);
 
-  // Discussion comments state (login gated)
+  // Discussion comments state
   const [commentText, setCommentText] = useState<string>('');
   const [commentSubmitted, setCommentSubmitted] = useState<boolean>(false);
 
@@ -82,7 +82,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       await communityPyqService.deleteCommunityPyq(currentPaper.id, currentPaper.filePath || currentPaper.fileUrl);
       storageService.deletePaper(currentPaper.id);
       onBack();
-    } catch (e) {
+    } catch {
       alert('Could not delete paper. Please try again.');
     }
   };
@@ -95,7 +95,31 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     } else {
       setCurrentPaper(paper);
     }
-  }, [paper.id]);
+
+    supabaseDb.fetchPaperRatings(paper.id).then((realRatings: any) => {
+      if (realRatings.ratingCount > 0 && realRatings.rating !== undefined) {
+        setCurrentPaper((prev) => ({
+          ...prev,
+          rating: realRatings.rating,
+          ratingCount: realRatings.ratingCount,
+          reviews: realRatings.reviews as any,
+        }));
+      } else {
+        setCurrentPaper((prev) => ({
+          ...prev,
+          rating: undefined,
+          ratingCount: 0,
+          reviews: realRatings.reviews || [],
+        }));
+      }
+
+      if (realRatings.userRating) {
+        setSelectedStars(realRatings.userRating);
+        if (realRatings.userReviewText) setReviewText(realRatings.userReviewText);
+        setHasExistingUserRating(true);
+      }
+    });
+  }, [paper.id, currentUser]);
 
   useEffect(() => {
     if (currentUser?.name && !reviewerName) {
@@ -103,16 +127,37 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     }
   }, [currentUser]);
 
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const author = reviewerName.trim() || currentUser?.name || 'Student';
-    const updated = storageService.addReview(currentPaper.id, selectedStars, reviewText, author);
-    if (updated) {
-      setCurrentPaper(updated);
-      setReviewSubmitted(true);
-      setReviewText('');
-      setTimeout(() => setReviewSubmitted(false), 3000);
+    if (!isAuthenticated) {
+      onRequireLogin();
+      return;
     }
+
+    setIsSubmittingReview(true);
+    setRatingError(null);
+
+    const author = reviewerName.trim() || currentUser?.name || 'Student';
+    const result = await supabaseDb.submitPaperRating(currentPaper.id, selectedStars, reviewText, author);
+
+    if (!result.success) {
+      setIsSubmittingReview(false);
+      setRatingError(result.error?.message || 'Failed to submit rating. Please try again.');
+      return;
+    }
+
+    const refreshed = await supabaseDb.fetchPaperRatings(currentPaper.id);
+    setCurrentPaper((prev) => ({
+      ...prev,
+      rating: refreshed.rating,
+      ratingCount: refreshed.ratingCount,
+      reviews: refreshed.reviews as any,
+    }));
+
+    setHasExistingUserRating(true);
+    setReviewSubmitted(true);
+    setIsSubmittingReview(false);
+    setTimeout(() => setReviewSubmitted(false), 3500);
   };
 
   const handleCommentSubmit = (e: React.FormEvent) => {
@@ -147,38 +192,39 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     .slice(0, 3);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       {/* Top Navigation Strip */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
+          type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs text-[#A7B4C8] hover:text-[#F8FAFC] transition-colors group"
+          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
         >
-          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
           <span>Back to question papers</span>
         </button>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Uploader Edit & Delete Controls */}
           {isUploader && (
             <>
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(true)}
-                className="px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-white transition-all flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
                 title="Edit this submission"
               >
-                <Edit2 className="w-3.5 h-3.5 text-cyan-400" />
+                <Edit2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                 <span>Edit</span>
               </button>
               <button
                 type="button"
                 onClick={handleDeleteSubmission}
-                className="px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 transition-all flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-red-bg)] text-[var(--color-red)] hover:opacity-90 border border-[var(--color-red)]/30 transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
                 title="Delete your submission"
               >
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                <span className="hidden sm:inline">Delete</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
               </button>
             </>
           )}
@@ -186,39 +232,40 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           <button
             type="button"
             onClick={() => setIsReportModalOpen(true)}
-            className="px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-medium bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 hover:border-rose-400 text-rose-300 transition-all flex items-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--color-red)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
             title="Report this paper and send removal request to the uploader"
           >
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+            <ShieldAlert className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Request Removal</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsAddToProjectOpen(true)}
-            className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-medium bg-[#101B2D] hover:bg-[#15233D] border border-white/[0.12] hover:border-cyan-400/40 text-[#A7B4C8] hover:text-[#F8FAFC] transition-all flex items-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
             title="Attach to a Study Project"
           >
-            <FolderPlus className="w-3.5 h-3.5 text-cyan-400" />
+            <FolderPlus className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
             <span className="hidden sm:inline">Add to Project</span>
           </button>
 
           <button
             type="button"
             onClick={(e) => onBookmarkPaper(currentPaper, e)}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border ${
               isBookmarked
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40'
-                : 'bg-[#101B2D] hover:bg-[#15233D] border border-white/[0.12] text-[#A7B4C8] hover:text-[#F8FAFC]'
+                ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30'
+                : 'bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-cyan-400' : ''}`} />
-            <span>{isBookmarked ? 'Bookmarked' : 'Save Paper'}</span>
+            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
+            <span>{isBookmarked ? 'Bookmarked' : 'Save'}</span>
           </button>
 
           <button
+            type="button"
             onClick={() => onDownloadPaper(currentPaper)}
-            className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/20 flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs flex items-center gap-1.5 cursor-pointer btn-quad-border"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download PDF</span>
@@ -226,83 +273,81 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         </div>
       </div>
 
-      {/* Floating Header Card */}
-      <div className="bg-[#101B2D]/85 backdrop-blur-xl border border-white/[0.14] rounded-3xl p-6 sm:p-8 shadow-2xl shadow-cyan-950/20 space-y-5 relative overflow-hidden">
-        {/* Ambient Top Glow */}
-        <div
-          className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none"
-          aria-hidden="true"
-        />
-
+      {/* Document Header Card */}
+      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-7 space-y-4 shadow-xs">
         {/* Metadata Strip */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[#A7B4C8]">
-          <span className="font-bold text-cyan-400">{currentPaper.examBoard}</span>
-          <span className="text-white/20">·</span>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+          <span className="font-semibold text-[var(--accent-blue)]">{currentPaper.examBoard}</span>
+          <span className="text-[var(--text-muted)] opacity-60">·</span>
           <span>{currentPaper.grade}</span>
-          <span className="text-white/20">·</span>
-          <span className="font-semibold text-white">{currentPaper.subject}</span>
-          <span className="text-white/20">·</span>
-          <span className="font-mono text-white/80">{currentPaper.year}</span>
+          <span className="text-[var(--text-muted)] opacity-60">·</span>
+          <span className="font-medium text-[var(--text-primary)]">{currentPaper.subject}</span>
+          <span className="text-[var(--text-muted)] opacity-60">·</span>
+          <span className="font-mono text-[var(--text-muted)]">{currentPaper.year}</span>
           {currentPaper.chapter && (
             <>
-              <span className="text-white/20">·</span>
-              <span className="text-teal-300">{currentPaper.chapter}</span>
+              <span className="text-[var(--text-muted)] opacity-60">·</span>
+              <span className="text-[var(--color-green)] font-medium">{currentPaper.chapter}</span>
             </>
           )}
         </div>
 
         {/* Document Title */}
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight leading-snug">
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight leading-snug">
           {currentPaper.title}
         </h1>
 
         {/* Description */}
-        <p className="text-xs sm:text-sm text-[#A7B4C8] leading-relaxed max-w-2xl">
+        <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed max-w-2xl">
           {currentPaper.description || `${currentPaper.subject} previous year examination paper with full question structure and official marking scheme.`}
         </p>
 
         {/* Technical Specs Strip */}
-        <div className="pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
-          <div className="flex items-center gap-5 text-[#A7B4C8]">
+        <div className="pt-3 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-4 text-[var(--text-secondary)] font-mono text-[11px]">
             <div className="flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-cyan-400" />
+              <Award className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
               <span>{currentPaper.totalMarks} Marks</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-teal-400" />
+              <Clock className="w-3.5 h-3.5 text-[var(--color-green)]" />
               <span>{currentPaper.timeAllowedMinutes / 60} Hours</span>
             </div>
-            <div className="flex items-center gap-1.5 text-amber-300">
-              <Star className="w-4 h-4 fill-amber-300" />
-              <span>{currentPaper.rating || '4.8'} ({currentPaper.ratingCount || 1} Reviews)</span>
+            <div className="flex items-center gap-1 text-[var(--color-yellow)]">
+              <Star className={`w-3.5 h-3.5 ${currentPaper.rating ? 'fill-current' : 'opacity-40'}`} />
+              <span>
+                {currentPaper.rating
+                  ? `${currentPaper.rating} (${currentPaper.ratingCount || 1})`
+                  : 'Not rated yet'}
+              </span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[#A7B4C8] text-[11px]">
-            <span>Uploaded by <strong className="text-white font-medium">{currentPaper.submittedBy?.name || 'Academic Contributor'}</strong></span>
+          <div className="flex flex-wrap items-center gap-2.5 text-[var(--text-muted)] text-[11px]">
+            <span>Uploaded by <strong className="text-[var(--text-primary)] font-medium">{currentPaper.submittedBy?.name || 'Community'}</strong></span>
             <span>·</span>
-            <span>{currentPaper.downloadsCount || 0} Downloads · {currentPaper.viewsCount || 1} Views</span>
+            <span>{currentPaper.downloadsCount || 0} Downloads</span>
             <span>·</span>
             <button
               onClick={() => setIsReportModalOpen(true)}
-              className="text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1 font-medium transition-colors"
-              title="Report issue and request uploader to remove paper"
+              className="text-[var(--color-red)] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              title="Report issue and request review"
             >
               <Flag className="w-3 h-3" />
-              <span>Report & Request Removal</span>
+              <span>Report</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Embedded Study Workspace Viewer */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[#F8FAFC]">
-            Interactive Question Workspace
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">
+            Question Paper Preview
           </h2>
-          <span className="text-xs text-[#A7B4C8]">
-            Zoom, navigate sections, and review questions
+          <span className="text-xs text-[var(--text-muted)]">
+            Full text questions and marking structure
           </span>
         </div>
 
@@ -312,66 +357,68 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         />
       </div>
 
-      {/* SECTION: RATINGS & REVIEWS (NO LOGIN REQUIRED) */}
-      <div className="bg-[#101B2D]/80 backdrop-blur-xl border border-white/[0.12] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* SECTION: RATINGS & REVIEWS */}
+      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-[#F8FAFC]">
-              Student Reviews & Rating
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+              Student Ratings & Reviews
             </h2>
-            <p className="text-xs text-[#A7B4C8] mt-0.5">
-              Leave feedback on readability and exam accuracy. No login required.
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+              Leave feedback on readability and exam accuracy.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-[#0A1222] px-3.5 py-2 rounded-2xl border border-white/[0.1]">
-            <div className="flex items-center gap-1 text-amber-300 font-mono text-base font-bold">
-              <Star className="w-4 h-4 fill-amber-300 text-amber-300" />
-              <span>{currentPaper.rating || '4.8'}</span>
+          <div className="flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-1.5 rounded-lg border border-[var(--border-divider)]">
+            <div className="flex items-center gap-1 text-[var(--color-yellow)] font-mono text-sm font-semibold">
+              <Star className={`w-3.5 h-3.5 ${currentPaper.rating ? 'fill-current' : 'opacity-50'}`} />
+              <span>{currentPaper.rating ? currentPaper.rating : '—'}</span>
             </div>
-            <span className="text-white/20">·</span>
-            <span className="text-xs text-[#A7B4C8]">
-              {currentPaper.reviews?.length || 1} student ratings
+            <span className="text-[var(--text-muted)] opacity-60">·</span>
+            <span className="text-xs text-[var(--text-secondary)]">
+              {currentPaper.ratingCount && currentPaper.ratingCount > 0
+                ? `${currentPaper.ratingCount} ${currentPaper.ratingCount === 1 ? 'rating' : 'ratings'}`
+                : 'Not rated yet'}
             </span>
           </div>
         </div>
 
         {/* Submit Review Form */}
-        <form onSubmit={handleReviewSubmit} className="bg-[#0A1222]/90 border border-white/[0.08] rounded-2xl p-4 sm:p-5 space-y-4 text-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <span className="font-medium text-[#F8FAFC]">How helpful was this paper?</span>
+        <form onSubmit={handleReviewSubmit} className="bg-[var(--surface-elevated)]/70 border border-[var(--border-divider)] rounded-xl p-4 space-y-3 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <span className="font-medium text-[var(--text-primary)]">Rate this paper:</span>
             
             {/* 1-5 Star Picker */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => setSelectedStars(s)}
-                  className="p-1 hover:scale-110 transition-transform"
-                  title={`${s} Stars`}
+                  className="p-1 hover:scale-110 transition-transform cursor-pointer"
+                  title={`${s} star`}
                 >
                   <Star
-                    className={`w-5 h-5 ${
+                    className={`w-4 h-4 ${
                       s <= selectedStars
-                        ? 'fill-amber-300 text-amber-300'
-                        : 'text-white/20'
+                        ? 'fill-[var(--color-yellow)] text-[var(--color-yellow)]'
+                        : 'text-[var(--text-muted)] opacity-40'
                     }`}
                   />
                 </button>
               ))}
-              <span className="ml-2 font-mono text-amber-300 font-bold">{selectedStars}.0</span>
+              <span className="ml-2 font-mono text-[var(--color-yellow)] font-semibold">{selectedStars}.0</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div className="sm:col-span-1">
               <input
                 type="text"
                 value={reviewerName}
                 onChange={(e) => setReviewerName(e.target.value)}
-                placeholder="Your name or grade (optional)"
-                className="w-full px-3 py-2 bg-[#101B2D] border border-white/[0.1] rounded-xl text-white placeholder-[#A7B4C8]/50 focus:outline-none focus:border-cyan-400 text-xs"
+                placeholder="Your name (optional)"
+                className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] text-xs"
               />
             </div>
             <div className="sm:col-span-2">
@@ -380,107 +427,106 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
                 placeholder="Add a helpful note (e.g. Good numerical coverage for Section B)"
-                className="w-full px-3 py-2 bg-[#101B2D] border border-white/[0.1] rounded-xl text-white placeholder-[#A7B4C8]/50 focus:outline-none focus:border-cyan-400 text-xs"
+                className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] text-xs"
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between pt-1">
             {reviewSubmitted ? (
-              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+              <span className="text-xs text-[var(--color-green)] font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Thank you! Your rating has been recorded.</span>
+                <span>Rating recorded! Thank you.</span>
               </span>
             ) : (
-              <span className="text-[11px] text-[#A7B4C8]">
-                Public feedback helps keep question papers verified.
+              <span className="text-[11px] text-[var(--text-muted)]">
+                Community feedback helps verify question quality.
               </span>
             )}
 
             <button
               type="submit"
-              className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] font-bold rounded-xl transition-all shadow-sm"
+              disabled={isSubmittingReview}
+              className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer text-xs btn-quad-border"
             >
-              Submit Rating
+              {isSubmittingReview ? 'Saving...' : hasExistingUserRating ? 'Update Rating' : 'Submit Rating'}
             </button>
           </div>
         </form>
 
         {/* Existing Reviews List */}
-        <div className="space-y-3 pt-2">
+        <div className="space-y-2.5 pt-1">
           {currentPaper.reviews && currentPaper.reviews.length > 0 ? (
             currentPaper.reviews.map((r) => (
               <div
                 key={r.id}
-                className="bg-[#0A1222]/60 border border-white/[0.06] rounded-2xl p-4 text-xs space-y-1.5"
+                className="bg-[var(--surface-elevated)]/60 border border-[var(--border-divider)] rounded-lg p-3 text-xs space-y-1"
               >
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold text-white flex items-center gap-2">
+                  <div className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
                     <span>{r.authorName}</span>
-                    <span className="text-white/20">·</span>
-                    <span className="text-[11px] font-mono text-[#A7B4C8]">
+                    <span className="text-[var(--text-muted)] opacity-60">·</span>
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
                       {new Date(r.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="flex items-center gap-0.5 text-amber-300">
+                  <div className="flex items-center gap-0.5 text-[var(--color-yellow)]">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <Star
                         key={i}
                         className={`w-3 h-3 ${
-                          i < r.stars ? 'fill-amber-300 text-amber-300' : 'text-white/10'
+                          i < r.stars ? 'fill-current' : 'opacity-30'
                         }`}
                       />
                     ))}
                   </div>
                 </div>
                 {r.text && (
-                  <p className="text-[#A7B4C8] leading-relaxed">
+                  <p className="text-[var(--text-secondary)] leading-relaxed">
                     {r.text}
                   </p>
                 )}
               </div>
             ))
           ) : (
-            <div className="text-center py-6 text-xs text-[#A7B4C8]">
+            <div className="text-center py-4 text-xs text-[var(--text-muted)]">
               No written reviews yet. Be the first to share feedback!
             </div>
           )}
         </div>
       </div>
 
-      {/* SECTION: DISCUSSION & COMMENTS (LOGIN REQUIRED TO POST) */}
-      <div className="bg-[#101B2D]/80 backdrop-blur-xl border border-white/[0.12] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+      {/* SECTION: DISCUSSION & COMMENTS */}
+      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-5 shadow-xs">
         <div>
-          <h2 className="text-lg font-bold text-[#F8FAFC]">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">
             Discussion & Questions
           </h2>
-          <p className="text-xs text-[#A7B4C8] mt-0.5">
+          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
             Ask questions about specific solutions, formulas, or tricky problems.
           </p>
         </div>
 
         {/* Post Comment Input */}
         {isAuthenticated ? (
-          <form onSubmit={handleCommentSubmit} className="space-y-3">
-            <div className="relative">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                rows={3}
-                placeholder="Ask about a specific question or solution step..."
-                className="w-full p-3.5 bg-[#0A1222] border border-white/[0.1] rounded-2xl text-xs text-white placeholder-[#A7B4C8]/50 focus:outline-none focus:border-cyan-400"
-              />
-            </div>
+          <form onSubmit={handleCommentSubmit} className="space-y-2.5">
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              rows={3}
+              placeholder="Ask about a specific question or solution step..."
+              className="w-full p-3 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
+            />
             <div className="flex items-center justify-between">
               {commentSubmitted ? (
-                <span className="text-xs text-emerald-400 font-medium">Comment posted!</span>
+                <span className="text-xs text-[var(--color-green)] font-medium">Comment posted!</span>
               ) : (
-                <span className="text-[11px] text-[#A7B4C8]">Posting as {currentUser?.name}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">Posting as {currentUser?.name}</span>
               )}
               <button
                 type="submit"
                 disabled={!commentText.trim()}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-1.5"
+                className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer btn-quad-border"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Post Comment</span>
@@ -488,15 +534,16 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             </div>
           </form>
         ) : (
-          <div className="bg-[#0A1222] border border-white/[0.08] rounded-2xl p-5 text-center space-y-3">
-            <MessageSquare className="w-8 h-8 text-cyan-400/50 mx-auto" />
-            <h3 className="text-sm font-bold text-[#F8FAFC]">Join the Question Discussion</h3>
-            <p className="text-xs text-[#A7B4C8] max-w-sm mx-auto">
-              Sign in to ask questions, help fellow students with answers, and bookmark papers to your library.
+          <div className="bg-[var(--surface-elevated)]/70 border border-[var(--border-divider)] rounded-xl p-5 text-center space-y-2.5">
+            <MessageSquare className="w-6 h-6 text-[var(--accent-blue)] mx-auto opacity-70" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Join the Question Discussion</h3>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+              Sign in to ask questions, help fellow students with answers, and bookmark papers.
             </p>
             <button
+              type="button"
               onClick={onRequireLogin}
-              className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-[#050914] text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/20"
+              className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 cursor-pointer btn-quad-border"
             >
               Sign In to Comment
             </button>
@@ -504,26 +551,26 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         )}
 
         {/* Existing Comments List */}
-        <div className="space-y-3 pt-2">
+        <div className="space-y-2.5 pt-1">
           {currentPaper.comments && currentPaper.comments.length > 0 ? (
             currentPaper.comments.map((c) => (
               <div
                 key={c.id}
-                className="bg-[#0A1222]/60 border border-white/[0.06] rounded-2xl p-4 text-xs space-y-1.5"
+                className="bg-[var(--surface-elevated)]/60 border border-[var(--border-divider)] rounded-lg p-3 text-xs space-y-1"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-white">{c.authorName}</span>
-                  <span className="text-[11px] font-mono text-[#A7B4C8]">
+                  <span className="font-semibold text-[var(--text-primary)]">{c.authorName}</span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">
                     {new Date(c.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <p className="text-[#F8FAFC] leading-relaxed">
+                <p className="text-[var(--text-secondary)] leading-relaxed">
                   {c.text}
                 </p>
               </div>
             ))
           ) : (
-            <div className="text-center py-6 text-xs text-[#A7B4C8]">
+            <div className="text-center py-4 text-xs text-[var(--text-muted)]">
               No comments yet. Have a doubt? Start the discussion!
             </div>
           )}
@@ -532,14 +579,15 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
       {/* Related Papers */}
       {relatedPapers.length > 0 && (
-        <div className="space-y-4 pt-4 border-t border-white/[0.08]">
+        <div className="space-y-4 pt-4 border-t border-[var(--border-divider)]">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-[#F8FAFC]">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
               Related {currentPaper.subject} Papers
             </h2>
             <button
+              type="button"
               onClick={onBack}
-              className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
+              className="text-xs text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
             >
               <span>View all</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -583,10 +631,16 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         }}
       />
 
+      {/* Project Toast */}
+      {projectToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[var(--surface-main)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs px-3.5 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in">
+          <span>{projectToast}</span>
+        </div>
+      )}
+
       {/* Removal Request Toast */}
       {reportToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#101B2D] text-[#F8FAFC] border border-amber-400/40 text-xs px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-in fade-in">
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+        <div className="fixed bottom-6 right-6 z-50 bg-[var(--surface-main)] text-[var(--text-primary)] border border-[var(--color-yellow)]/40 text-xs px-3.5 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in">
           <span>{reportToast}</span>
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Eye, EyeOff, Lock, Mail, User as UserIcon, Check, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, User as UserIcon, Check, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase, signInWithGoogle } from '../supabaseClient.js';
 
 interface AuthCardProps {
@@ -56,7 +56,6 @@ export const AuthCard: React.FC<AuthCardProps> = ({
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupSuccessMessage, setSignupSuccessMessage] = useState<string | null>(null);
 
-  // Check URL query parameters and storage on mount to pre-fill email and show success message if coming from signup
   useEffect(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -77,7 +76,6 @@ export const AuthCard: React.FC<AuthCardProps> = ({
     }
   }, []);
 
-  // Sync internal mode if initialMode prop updates
   useEffect(() => {
     if (initialMode) {
       setMode(initialMode);
@@ -97,213 +95,116 @@ export const AuthCard: React.FC<AuthCardProps> = ({
     }
   };
 
-  // =========================================================================
-  // SIGN IN HANDLER
-  // =========================================================================
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginLoading) return; // Prevent duplicate submissions
-
+    setLoginLoading(true);
     setLoginError(null);
 
-    const email = loginEmail.trim();
-    const password = loginPassword;
-
-    if (!email || !password) {
-      setLoginError('Please enter both your email address and password.');
-      return;
-    }
-
-    setLoginLoading(true);
+    const emailTrimmed = loginEmail.trim();
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: emailTrimmed,
+        password: loginPassword,
       });
 
       if (error) {
-        const lowerMsg = (error.message || '').toLowerCase();
-        if (lowerMsg.includes('email not confirmed')) {
-          setLoginError('Your email address has not been confirmed yet. Please check your inbox for the confirmation email.');
-        } else if (lowerMsg.includes('invalid login credentials')) {
-          setLoginError('Incorrect email or password. Please verify your credentials and try again.');
-        } else {
-          setLoginError(error.message || 'Unable to sign in. Please verify your credentials.');
-        }
         setLoginLoading(false);
-        return;
-      }
-
-      // Only redirect when a real session exists after login
-      if (!data?.session) {
-        setLoginError('Please check your email and confirm your account before logging in.');
-        setLoginLoading(false);
-        return;
-      }
-
-      setLoginLoading(false);
-
-      // Clean up registration query parameters and storage
-      try {
-        sessionStorage.removeItem('pyq_registered_email');
-        sessionStorage.removeItem('pyq_registered_message');
-        const url = new URL(window.location.href);
-        url.searchParams.delete('email');
-        url.searchParams.delete('registered');
-        window.history.pushState({}, '', url.pathname);
-      } catch {
-        // ignore
-      }
-
-      // Redirect the user to the Home page ("/")
-      try {
-        window.history.pushState({}, '', '/');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      } catch {
-        // ignore
-      }
-
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        window.location.href = '/';
-      }
-    } catch (err: any) {
-      setLoginError(
-        err?.message || 'A network error occurred while connecting to authentication service. Please check your connection.'
-      );
-      setLoginLoading(false);
-    }
-  };
-
-  // =========================================================================
-  // SIGN UP HANDLER
-  // =========================================================================
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (signupLoading) return; // Prevent duplicate submissions
-
-    setSignupError(null);
-    setSignupSuccessMessage(null);
-
-    const email = signupEmail.trim();
-    const password = signupPassword;
-    const confirmPassword = signupConfirmPassword;
-    const trimmedName = signupName.trim();
-
-    if (!email || !password) {
-      setSignupError('Please provide an email address and password.');
-      return;
-    }
-
-    // Basic email format check
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setSignupError('Please enter a valid email address (e.g. yourname@gmail.com).');
-      return;
-    }
-
-    if (password.length < 6) {
-      setSignupError('Password must be at least 6 characters long.');
-      return;
-    }
-
-    if (confirmPassword && password !== confirmPassword) {
-      setSignupError('Passwords do not match. Please re-enter your password.');
-      return;
-    }
-
-    setSignupLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: trimmedName || undefined,
-            name: trimmedName || undefined,
-          },
-        },
-      });
-
-      if (error) {
-        const errorLower = (error.message || '').toLowerCase();
-        if (errorLower.includes('valid') || errorLower.includes('invalid') || error.status === 422) {
-          setSignupError('Please provide a valid, active email address (e.g. student@gmail.com).');
-        } else if (errorLower.includes('rate limit') || error.status === 429) {
-          setSignupError('Too many attempts. Please wait a moment before trying again.');
-        } else if (errorLower.includes('already registered')) {
-          setSignupError('An account with this email address already exists. Please log in instead.');
+        if (error.message.toLowerCase().includes('email not confirmed')) {
+          setLoginError('Please verify your email address before signing in. Check your inbox or spam folder.');
+        } else if (error.message.toLowerCase().includes('invalid login credentials')) {
+          setLoginError('Invalid email or password. Please check your details and try again.');
         } else {
-          setSignupError(error.message || 'Unable to create account. Please check the information provided.');
+          setLoginError(error.message);
         }
-        setSignupLoading(false);
         return;
       }
 
-      // Check if user already exists (Supabase email enumeration protection returns empty identities array)
-      if (data?.user?.identities && data.user.identities.length === 0) {
-        setSignupError('An account with this email address already exists. Please log in instead.');
-        setSignupLoading(false);
-        return;
-      }
-
-      // If Supabase automatically creates an active session (e.g. email confirmation disabled or auto-confirmed)
-      if (data?.session) {
-        setSignupLoading(false);
+      if (data.session) {
         if (onSuccess) {
           onSuccess();
         } else {
           window.location.href = '/';
         }
-        return;
-      }
-
-      // Otherwise, an email verification link was sent
-      setSignupLoading(false);
-      const successMsg =
-        'Account created successfully! Please check your email inbox and verify your address before logging in.';
-
-      setLoginEmail(email);
-      setLoginSuccessMessage(successMsg);
-      setSignupSuccessMessage(successMsg);
-      setSignupError(null);
-      setLoginError(null);
-
-      try {
-        sessionStorage.setItem('pyq_registered_email', email);
-        sessionStorage.setItem('pyq_registered_message', successMsg);
-
-        const url = new URL(window.location.href);
-        url.pathname = '/login';
-        url.searchParams.set('email', email);
-        url.searchParams.set('registered', 'true');
-        window.history.pushState({ email, registered: true }, '', url.toString());
-      } catch {
-        // ignore
-      }
-
-      setMode('login');
-      if (onSwitchMode) {
-        onSwitchMode('login');
       }
     } catch (err: any) {
-      setSignupError(
-        err?.message || 'A network error occurred while connecting. Please try again.'
-      );
-      setSignupLoading(false);
+      setLoginLoading(false);
+      setLoginError(err?.message || 'An unexpected error occurred during sign in.');
     }
   };
 
-  // =========================================================================
-  // GOOGLE OAUTH HANDLER
-  // =========================================================================
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupLoading(true);
+    setSignupError(null);
+    setSignupSuccessMessage(null);
+
+    const emailTrimmed = signupEmail.trim();
+
+    if (signupPassword !== signupConfirmPassword) {
+      setSignupLoading(false);
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    if (signupPassword.length < 6) {
+      setSignupLoading(false);
+      setSignupError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: emailTrimmed,
+        password: signupPassword,
+        options: {
+          data: {
+            full_name: signupName.trim() || undefined,
+          },
+        },
+      });
+
+      if (error) {
+        setSignupLoading(false);
+        if (error.message.toLowerCase().includes('already registered')) {
+          setSignupError('An account with this email address already exists. Please sign in instead.');
+        } else {
+          setSignupError(error.message);
+        }
+        return;
+      }
+
+      setSignupLoading(false);
+
+      if (data.session) {
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          window.location.href = '/';
+        }
+      } else {
+        const msg = 'Account created successfully! Please check your email to verify your address.';
+        setSignupSuccessMessage(msg);
+        try {
+          sessionStorage.setItem('pyq_registered_email', emailTrimmed);
+          sessionStorage.setItem('pyq_registered_message', msg);
+        } catch {
+          // ignore
+        }
+        setTimeout(() => {
+          switchMode('login');
+          setLoginEmail(emailTrimmed);
+        }, 1500);
+      }
+    } catch (err: any) {
+      setSignupLoading(false);
+      setSignupError(err?.message || 'An unexpected error occurred during account creation.');
+    }
+  };
+
   const handleGoogleLogin = async () => {
     try {
       const { error } = await signInWithGoogle();
-
       if (error) {
         if (mode === 'login') {
           setLoginError(error.message || 'Failed to sign in with Google.');
@@ -323,50 +224,34 @@ export const AuthCard: React.FC<AuthCardProps> = ({
 
   return (
     <div
-      className={`w-full max-w-md mx-auto bg-[#101B2D]/95 border border-white/[0.14] rounded-3xl p-6 sm:p-8 text-[#F8FAFC] shadow-2xl shadow-cyan-950/40 relative overflow-hidden backdrop-blur-xl ${
-        isModal ? '' : 'my-8 sm:my-12'
+      className={`w-full max-w-md mx-auto bg-[var(--surface-main)]/90 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-6 sm:p-7 text-[var(--text-primary)] shadow-lg relative overflow-hidden ${
+        isModal ? '' : 'my-6 sm:my-10'
       }`}
     >
-      {/* Subtle Ambient Decorative Lighting */}
-      <div
-        className="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute -bottom-16 -right-16 w-56 h-56 rounded-full bg-teal-500/10 blur-3xl pointer-events-none"
-        aria-hidden="true"
-      />
-
       {/* Studify Branding Header */}
-      <div className="text-center space-y-3 relative z-10 mb-6">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-teal-500/15 to-emerald-500/10 border border-cyan-400/30 flex items-center justify-center mx-auto text-cyan-300 shadow-lg shadow-cyan-500/15">
-          <BookOpen className="w-6 h-6" />
+      <div className="text-center space-y-1.5 relative z-10 mb-5">
+        <div className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+          Studify
         </div>
-
-        <div className="space-y-1">
-          <div className="text-xs font-mono uppercase tracking-widest text-cyan-400 font-semibold">
-            Studify Platform
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
-          </h1>
-          <p className="text-xs sm:text-sm text-[#A7B4C8] leading-relaxed max-w-xs mx-auto">
-            {mode === 'login'
-              ? 'Continue your learning journey with verified past papers and exam resources.'
-              : 'Join Studify to find past papers, organize resources, and prepare for your exams.'}
-          </p>
-        </div>
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+          {mode === 'login' ? 'Welcome back' : 'Create your account'}
+        </h1>
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-xs mx-auto">
+          {mode === 'login'
+            ? 'Continue your study workflow with verified past papers.'
+            : 'Join Studify to find past papers and organize study resources.'}
+        </p>
       </div>
 
-      {/* Screen Mode Tabs (Login / Sign Up) */}
-      <div className="flex bg-[#0A1222]/80 p-1 rounded-2xl border border-white/[0.08] mb-6 relative z-10">
+      {/* Screen Mode Tabs */}
+      <div className="flex bg-[var(--surface-elevated)] p-1 rounded-xl border border-[var(--border-divider)] mb-5 relative z-10">
         <button
           type="button"
           onClick={() => switchMode('login')}
-          className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer btn-quad-border ${
             mode === 'login'
-              ? 'bg-[#15233D] text-cyan-300 shadow-md border border-cyan-400/30'
-              : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+              ? 'bg-[var(--surface-main)] text-[var(--accent-blue)] shadow-xs'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
           Sign In
@@ -374,37 +259,33 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         <button
           type="button"
           onClick={() => switchMode('signup')}
-          className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer btn-quad-border ${
             mode === 'signup'
-              ? 'bg-[#15233D] text-cyan-300 shadow-md border border-cyan-400/30'
-              : 'text-[#A7B4C8] hover:text-[#F8FAFC]'
+              ? 'bg-[var(--surface-main)] text-[var(--accent-blue)] shadow-xs'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
           Sign Up
         </button>
       </div>
 
-      {/* ========================================================================= */}
-      {/* SIGN IN / LOGIN FORM UI */}
-      {/* ========================================================================= */}
+      {/* SIGN IN FORM */}
       {mode === 'login' ? (
-        <div className="space-y-4 relative z-10">
-          {/* Clear success message ABOVE the form when user comes from a successful signup */}
+        <div className="space-y-3.5 relative z-10">
           {loginSuccessMessage && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5 text-emerald-300 text-xs text-left animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="p-3 rounded-xl bg-[var(--accent-green-bg)] border border-[var(--color-green)]/30 flex items-start gap-2 text-[var(--color-green)] text-xs text-left animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{loginSuccessMessage}</span>
             </div>
           )}
 
-          <form onSubmit={handleSignIn} className="space-y-4">
-            {/* Email Address (Pre-filled from signup) */}
-            <div className="space-y-1.5 text-left">
-              <label htmlFor="login-email" className="block text-xs font-medium text-[#A7B4C8]">
+          <form onSubmit={handleSignIn} className="space-y-3.5">
+            <div className="space-y-1 text-left">
+              <label htmlFor="login-email" className="block text-xs font-medium text-[var(--text-secondary)]">
                 Email address
               </label>
               <div className="relative flex items-center">
-                <Mail className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+                <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
                 <input
                   id="login-email"
                   type="email"
@@ -414,26 +295,19 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
                 />
               </div>
             </div>
 
-            {/* Password with Show/Hide toggle */}
-            <div className="space-y-1.5 text-left">
+            <div className="space-y-1 text-left">
               <div className="flex items-center justify-between">
-                <label htmlFor="login-password" className="block text-xs font-medium text-[#A7B4C8]">
+                <label htmlFor="login-password" className="block text-xs font-medium text-[var(--text-secondary)]">
                   Password
                 </label>
-                <button
-                  type="button"
-                  className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors"
-                >
-                  Forgot password?
-                </button>
               </div>
               <div className="relative flex items-center">
-                <Lock className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+                <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
                 <input
                   id="login-password"
                   type={showLoginPassword ? 'text' : 'password'}
@@ -443,74 +317,69 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full pl-10 pr-10 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
+                  className="w-full pl-9 pr-9 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
                 />
                 <button
                   type="button"
                   onClick={() => setShowLoginPassword(!showLoginPassword)}
                   aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 text-[#A7B4C8] hover:text-[#F8FAFC] p-1 transition-colors cursor-pointer"
+                  className="absolute right-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 transition-colors cursor-pointer"
                 >
-                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showLoginPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
 
-            {/* Remember Me Checkbox */}
-            <div className="flex items-center gap-2 pt-1 text-left">
+            <div className="flex items-center gap-2 pt-0.5 text-left">
               <button
                 type="button"
                 role="checkbox"
                 aria-checked={rememberMe}
                 onClick={() => setRememberMe(!rememberMe)}
-                className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all cursor-pointer ${
+                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer ${
                   rememberMe
-                    ? 'bg-cyan-500 border-cyan-400 text-[#050914]'
-                    : 'bg-[#0A1222] border-white/[0.2] hover:border-white/[0.3]'
+                    ? 'bg-[var(--accent-blue)] border-[var(--accent-blue)] text-white dark:text-[#1C2530]'
+                    : 'bg-[var(--input-bg)] border-[var(--input-border)]'
                 }`}
               >
                 {rememberMe && <Check className="w-3 h-3 stroke-[3]" />}
               </button>
               <label
                 onClick={() => setRememberMe(!rememberMe)}
-                className="text-xs text-[#A7B4C8] cursor-pointer select-none"
+                className="text-xs text-[var(--text-secondary)] cursor-pointer select-none"
               >
                 Remember me
               </label>
             </div>
 
-            {/* Prominent Login Button */}
             <button
               type="submit"
               disabled={loginLoading}
-              className="w-full py-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-[#050914] text-xs sm:text-sm font-extrabold rounded-xl transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed btn-quad-border"
             >
               {loginLoading ? 'Signing In...' : 'Log In'}
             </button>
 
-            {/* Error Message Display under the form */}
             {loginError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-rose-300 text-xs text-left animate-in fade-in">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 flex items-start gap-2 text-[var(--color-red)] text-xs text-left animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{loginError}</span>
               </div>
             )}
 
-            {/* Divider */}
-            <div className="relative my-4 flex items-center justify-center">
-              <div className="w-full border-t border-white/[0.08]" aria-hidden="true" />
-              <span className="bg-[#101B2D] px-3 text-[11px] font-mono text-[#A7B4C8] uppercase tracking-wider relative z-10">
-                or continue with
+            <div className="relative my-3 flex items-center justify-center">
+              <div className="w-full border-t border-[var(--border-divider)]" aria-hidden="true" />
+              <span className="bg-[var(--surface-main)] px-2.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider relative z-10">
+                or
               </span>
             </div>
 
-            {/* Google Sign-in */}
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full py-2.5 px-4 bg-[#0A1222] hover:bg-[#15233D] border border-white/[0.12] hover:border-white/[0.2] text-[#F8FAFC] text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+              className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer btn-quad-border"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="#4285F4"
                   d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
@@ -531,13 +400,12 @@ export const AuthCard: React.FC<AuthCardProps> = ({
               <span>Continue with Google</span>
             </button>
 
-            {/* Switch to Sign Up */}
-            <div className="pt-2 text-center text-xs text-[#A7B4C8]">
+            <div className="pt-1.5 text-center text-xs text-[var(--text-secondary)]">
               Don't have an account?{' '}
               <button
                 type="button"
                 onClick={() => switchMode('signup')}
-                className="font-semibold text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors ml-1 cursor-pointer"
+                className="font-medium text-[var(--accent-blue)] hover:underline ml-0.5 cursor-pointer"
               >
                 Sign up
               </button>
@@ -545,17 +413,14 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           </form>
         </div>
       ) : (
-        /* ========================================================================= */
-        /* SIGN UP FORM UI */
-        /* ========================================================================= */
-        <form onSubmit={handleSignUp} className="space-y-3.5 relative z-10">
-          {/* Full Name */}
-          <div className="space-y-1.5 text-left">
-            <label htmlFor="signup-name" className="block text-xs font-medium text-[#A7B4C8]">
+        /* SIGN UP FORM */
+        <form onSubmit={handleSignUp} className="space-y-3 relative z-10">
+          <div className="space-y-1 text-left">
+            <label htmlFor="signup-name" className="block text-xs font-medium text-[var(--text-secondary)]">
               Full name
             </label>
             <div className="relative flex items-center">
-              <UserIcon className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+              <UserIcon className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
               <input
                 id="signup-name"
                 type="text"
@@ -564,18 +429,17 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 value={signupName}
                 onChange={(e) => setSignupName(e.target.value)}
                 placeholder="e.g. Alex Morgan"
-                className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
               />
             </div>
           </div>
 
-          {/* Email Address */}
-          <div className="space-y-1.5 text-left">
-            <label htmlFor="signup-email" className="block text-xs font-medium text-[#A7B4C8]">
+          <div className="space-y-1 text-left">
+            <label htmlFor="signup-email" className="block text-xs font-medium text-[var(--text-secondary)]">
               Email address
             </label>
             <div className="relative flex items-center">
-              <Mail className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+              <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
               <input
                 id="signup-email"
                 type="email"
@@ -585,18 +449,17 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 value={signupEmail}
                 onChange={(e) => setSignupEmail(e.target.value)}
                 placeholder="name@example.com"
-                className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
               />
             </div>
           </div>
 
-          {/* Password with Show/Hide toggle */}
-          <div className="space-y-1.5 text-left">
-            <label htmlFor="signup-password" className="block text-xs font-medium text-[#A7B4C8]">
+          <div className="space-y-1 text-left">
+            <label htmlFor="signup-password" className="block text-xs font-medium text-[var(--text-secondary)]">
               Password
             </label>
             <div className="relative flex items-center">
-              <Lock className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+              <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
               <input
                 id="signup-password"
                 type={showSignupPassword ? 'text' : 'password'}
@@ -605,27 +468,26 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 disabled={signupLoading}
                 value={signupPassword}
                 onChange={(e) => setSignupPassword(e.target.value)}
-                placeholder="Create a strong password (min 6 chars)"
-                className="w-full pl-10 pr-10 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
+                placeholder="At least 6 characters"
+                className="w-full pl-9 pr-9 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
               />
               <button
                 type="button"
                 onClick={() => setShowSignupPassword(!showSignupPassword)}
                 aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 text-[#A7B4C8] hover:text-[#F8FAFC] p-1 transition-colors cursor-pointer"
+                className="absolute right-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 transition-colors cursor-pointer"
               >
-                {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showSignupPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
 
-          {/* Confirm Password */}
-          <div className="space-y-1.5 text-left">
-            <label htmlFor="signup-confirm-password" className="block text-xs font-medium text-[#A7B4C8]">
+          <div className="space-y-1 text-left">
+            <label htmlFor="signup-confirm-password" className="block text-xs font-medium text-[var(--text-secondary)]">
               Confirm password
             </label>
             <div className="relative flex items-center">
-              <Lock className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
+              <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 pointer-events-none" />
               <input
                 id="signup-confirm-password"
                 type={showSignupConfirmPassword ? 'text' : 'password'}
@@ -634,61 +496,55 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 disabled={signupLoading}
                 value={signupConfirmPassword}
                 onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                className="w-full pl-10 pr-10 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
+                placeholder="Confirm password"
+                className="w-full pl-9 pr-9 py-2 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
               />
               <button
                 type="button"
                 onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
                 aria-label={showSignupConfirmPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 text-[#A7B4C8] hover:text-[#F8FAFC] p-1 transition-colors cursor-pointer"
+                className="absolute right-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 transition-colors cursor-pointer"
               >
-                {showSignupConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showSignupConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
 
-
-          {/* Prominent Create Account Button */}
           <button
             type="submit"
             disabled={signupLoading}
-            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-[#050914] text-xs sm:text-sm font-extrabold rounded-xl transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed btn-quad-border"
           >
             {signupLoading ? 'Creating Account...' : 'Create Account'}
           </button>
 
-          {/* Email Confirmation Message Display under the form */}
           {signupSuccessMessage && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-start gap-2.5 text-emerald-300 text-xs text-left animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="p-2.5 rounded-lg bg-[var(--accent-green-bg)] border border-[var(--color-green)]/30 flex items-start gap-2 text-[var(--color-green)] text-xs text-left animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{signupSuccessMessage}</span>
             </div>
           )}
 
-          {/* Error Message Display under the form */}
           {signupError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-rose-300 text-xs text-left animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 flex items-start gap-2 text-[var(--color-red)] text-xs text-left animate-in fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{signupError}</span>
             </div>
           )}
 
-          {/* Divider */}
-          <div className="relative my-4 flex items-center justify-center">
-            <div className="w-full border-t border-white/[0.08]" aria-hidden="true" />
-            <span className="bg-[#101B2D] px-3 text-[11px] font-mono text-[#A7B4C8] uppercase tracking-wider relative z-10">
-              or sign up with
+          <div className="relative my-3 flex items-center justify-center">
+            <div className="w-full border-t border-[var(--border-divider)]" aria-hidden="true" />
+            <span className="bg-[var(--surface-main)] px-2.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider relative z-10">
+              or
             </span>
           </div>
 
-          {/* Google Sign-up */}
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full py-2.5 px-4 bg-[#0A1222] hover:bg-[#15233D] border border-white/[0.12] hover:border-white/[0.2] text-[#F8FAFC] text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+            className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer btn-quad-border"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 fill="#4285F4"
                 d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
@@ -709,13 +565,12 @@ export const AuthCard: React.FC<AuthCardProps> = ({
             <span>Sign up with Google</span>
           </button>
 
-          {/* Switch to Login */}
-          <div className="pt-2 text-center text-xs text-[#A7B4C8]">
+          <div className="pt-1.5 text-center text-xs text-[var(--text-secondary)]">
             Already have an account?{' '}
             <button
               type="button"
               onClick={() => switchMode('login')}
-              className="font-semibold text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors ml-1 cursor-pointer"
+              className="font-medium text-[var(--accent-blue)] hover:underline ml-0.5 cursor-pointer"
             >
               Log in
             </button>
