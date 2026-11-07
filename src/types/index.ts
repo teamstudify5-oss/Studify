@@ -2,7 +2,7 @@ export type ExamBoard = 'CBSE' | 'ICSE' | 'JEE Main' | 'JEE Advanced' | 'NEET UG
 
 export type GradeLevel = 'Class 9' | 'Class 10' | 'Class 11' | 'Class 12' | 'Competitive';
 
-export type PaperStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'flagged' | 'archived' | 'takedown';
+export type PaperStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'flagged' | 'archived' | 'takedown' | 'removed';
 
 export interface QuestionChoice {
   key: 'A' | 'B' | 'C' | 'D';
@@ -54,11 +54,15 @@ export interface Paper {
   subject: string;
   year: number;
   chapter?: string;
-  totalMarks: number;
-  timeAllowedMinutes: number;
+  eventName?: string;
+  totalMarks?: number;
+  timeAllowedMinutes?: number;
   description: string;
   status: PaperStatus;
   rejectionReason?: string;
+  removalReason?: string;
+  removedBy?: string;
+  removedAt?: string;
   submittedBy: {
     id: string;
     name: string;
@@ -72,6 +76,9 @@ export interface Paper {
   fileSizeBytes: number;
   fileUrl?: string;
   filePath?: string;
+  isImageBased?: boolean;
+  imageUrls?: string[];
+  pageCount?: number;
   uploaderDisplayName?: string;
   sections: PaperSection[];
   tags: string[];

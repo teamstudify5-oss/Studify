@@ -24,8 +24,8 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
   const [year, setYear] = useState<number>(paper.year);
   const [chapter, setChapter] = useState(paper.chapter || '');
   const [description, setDescription] = useState(paper.description || '');
-  const [totalMarks, setTotalMarks] = useState(paper.totalMarks || 100);
-  const [timeAllowedMinutes, setTimeAllowedMinutes] = useState(paper.timeAllowedMinutes || 180);
+  const [totalMarks, setTotalMarks] = useState<number | string>(paper.totalMarks || '');
+  const [timeAllowedMinutes, setTimeAllowedMinutes] = useState<number | string>(paper.timeAllowedMinutes || '');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -42,6 +42,9 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
     }
 
     setIsSubmitting(true);
+    const parsedMarks = totalMarks ? Number(totalMarks) : undefined;
+    const parsedDuration = timeAllowedMinutes ? Number(timeAllowedMinutes) : undefined;
+
     const updates = {
       title: title.trim(),
       subject,
@@ -50,8 +53,8 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
       year: Number(year),
       chapter: chapter.trim() || undefined,
       description: description.trim() || '',
-      totalMarks: Number(totalMarks),
-      timeAllowedMinutes: Number(timeAllowedMinutes),
+      totalMarks: parsedMarks && !isNaN(parsedMarks) ? parsedMarks : undefined,
+      timeAllowedMinutes: parsedDuration && !isNaN(parsedDuration) ? parsedDuration : undefined,
       tags: [examBoard, grade, subject, String(year)],
     };
 
@@ -242,25 +245,27 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[var(--text-secondary)] font-medium mb-1">Total Marks</label>
+              <label className="block text-[var(--text-secondary)] font-medium mb-1">Total Marks (optional)</label>
               <input
                 type="number"
                 value={totalMarks}
-                onChange={(e) => setTotalMarks(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
+                onChange={(e) => setTotalMarks(e.target.value)}
+                placeholder="Unspecified"
+                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)]"
                 min={1}
                 max={500}
               />
             </div>
             <div>
-              <label className="block text-[var(--text-secondary)] font-medium mb-1">Time (Minutes)</label>
+              <label className="block text-[var(--text-secondary)] font-medium mb-1">Time (Minutes, optional)</label>
               <input
                 type="number"
                 value={timeAllowedMinutes}
-                onChange={(e) => setTimeAllowedMinutes(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
-                min={15}
-                max={360}
+                onChange={(e) => setTimeAllowedMinutes(e.target.value)}
+                placeholder="Unspecified"
+                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)]"
+                min={10}
+                max={600}
               />
             </div>
           </div>
@@ -270,14 +275,14 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="btn-quad-border px-4 py-2 rounded-xl bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] font-medium transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] font-medium transition-colors cursor-pointer border border-[var(--border-divider)] shadow-xs"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="btn-quad-border px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white font-bold transition-all flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white font-bold transition-all flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? (
                 <span>Saving...</span>

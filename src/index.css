@@ -3,67 +3,67 @@
 
 @layer base {
   :root, [data-theme="dark"], .dark {
-    --bg-app: #090D14;
-    --surface-sidebar: #0F151F;
-    --surface-main: rgba(19, 25, 34, 0.82);
-    --surface-main-solid: #131922;
-    --surface-elevated: rgba(27, 36, 48, 0.85);
-    --surface-elevated-solid: #1B2430;
-    --surface-secondary: rgba(34, 45, 59, 0.90);
-    --border-divider: #2C3949;
-    --border-subtle: rgba(44, 57, 73, 0.65);
-    --border-hover: rgba(82, 141, 235, 0.50);
+    --bg-app: #06090E;
+    --surface-sidebar: #090E17;
+    --surface-main: rgba(11, 16, 25, 0.88);
+    --surface-main-solid: #0B1019;
+    --surface-elevated: rgba(16, 24, 37, 0.90);
+    --surface-elevated-solid: #101825;
+    --surface-secondary: rgba(22, 33, 49, 0.92);
+    --border-divider: #1E293B;
+    --border-subtle: rgba(30, 41, 59, 0.65);
+    --border-hover: rgba(56, 189, 248, 0.35);
     --text-primary: #F1F5F9;
     --text-secondary: #94A3B8;
     --text-muted: #64748B;
-    --color-blue: #528DEB;
-    --color-green: #47B982;
-    --color-red: #E95F70;
-    --color-yellow: #E7C25E;
-    --accent-blue: #528DEB;
-    --accent-green: #47B982;
-    --accent-red: #E95F70;
-    --accent-yellow: #E7C25E;
-    --accent-blue-bg: rgba(82, 141, 235, 0.14);
-    --accent-green-bg: rgba(71, 185, 130, 0.14);
-    --accent-red-bg: rgba(233, 95, 112, 0.14);
-    --accent-yellow-bg: rgba(231, 194, 94, 0.14);
-    --modal-bg: rgba(19, 25, 34, 0.94);
-    --modal-backdrop: rgba(5, 7, 11, 0.75);
-    --input-bg: rgba(15, 21, 31, 0.85);
-    --input-border: #2C3949;
+    --color-blue: #38BDF8;
+    --color-green: #34D399;
+    --color-red: #F87171;
+    --color-yellow: #FBBF24;
+    --accent-blue: #38BDF8;
+    --accent-green: #34D399;
+    --accent-red: #F87171;
+    --accent-yellow: #FBBF24;
+    --accent-blue-bg: rgba(56, 189, 248, 0.12);
+    --accent-green-bg: rgba(52, 211, 153, 0.12);
+    --accent-red-bg: rgba(248, 113, 113, 0.12);
+    --accent-yellow-bg: rgba(251, 191, 36, 0.12);
+    --modal-bg: rgba(11, 16, 25, 0.96);
+    --modal-backdrop: rgba(3, 5, 8, 0.82);
+    --input-bg: rgba(9, 14, 23, 0.90);
+    --input-border: #1E293B;
   }
 
   [data-theme="light"], .light {
-    --bg-app: #F8FAFC;
-    --surface-sidebar: #F1F5F9;
-    --surface-main: rgba(255, 255, 255, 0.85);
+    --bg-app: #F4F6F9;
+    --surface-sidebar: #ECEFF3;
+    --surface-main: rgba(255, 255, 255, 0.94);
     --surface-main-solid: #FFFFFF;
-    --surface-elevated: rgba(241, 244, 247, 0.90);
-    --surface-elevated-solid: #F1F4F7;
-    --surface-secondary: rgba(232, 238, 244, 0.90);
-    --border-divider: #E2E8F0;
-    --border-subtle: rgba(226, 232, 240, 0.85);
-    --border-hover: rgba(71, 127, 208, 0.50);
+    --surface-elevated: rgba(243, 246, 250, 0.94);
+    --surface-elevated-solid: #F3F6FA;
+    --surface-secondary: rgba(234, 239, 245, 0.94);
+    --border-divider: #CBD5E1;
+    --border-subtle: rgba(203, 213, 225, 0.80);
+    --border-hover: rgba(5, 150, 105, 0.40);
     --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --text-muted: #94A3B8;
-    --color-blue: #477FD0;
-    --color-green: #399B73;
-    --color-red: #D96B78;
-    --color-yellow: #D2A849;
-    --accent-blue: #477FD0;
-    --accent-green: #399B73;
-    --accent-red: #D96B78;
-    --accent-yellow: #D2A849;
-    --accent-blue-bg: rgba(71, 127, 208, 0.12);
-    --accent-green-bg: rgba(57, 155, 115, 0.12);
-    --accent-red-bg: rgba(217, 107, 120, 0.12);
-    --accent-yellow-bg: rgba(210, 168, 73, 0.12);
-    --modal-bg: rgba(255, 255, 255, 0.96);
-    --modal-backdrop: rgba(15, 23, 42, 0.50);
-    --input-bg: rgba(248, 250, 252, 0.95);
-    --input-border: #E2E8F0;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+    --color-blue: #2563EB;
+    --color-green: #059669;
+    --color-red: #DC2626;
+    --color-yellow: #D97706;
+    --accent-blue: #2563EB;
+    --accent-green: #059669;
+    --accent-red: #DC2626;
+    --accent-yellow: #D97706;
+    --accent-blue-bg: rgba(37, 99, 235, 0.10);
+    --accent-green-bg: rgba(5, 150, 105, 0.12);
+    --accent-red-bg: rgba(220, 38, 38, 0.10);
+    --accent-yellow-bg: rgba(217, 119, 6, 0.12);
+    --modal-bg: rgba(255, 255, 255, 0.98);
+    --modal-backdrop: rgba(15, 23, 42, 0.55);
+    --input-bg: rgba(248, 250, 252, 0.98);
+    --input-border: #CBD5E1;
   }
 
   body {
@@ -103,7 +103,7 @@
 }
 
 /* ========================================================================= */
-/* ATMOSPHERIC LAYERED GRADIENT BACKGROUND (5-Colour Identity: Red, Blue, Yellow, Green, Black) */
+/* ATMOSPHERIC LAYERED GRADIENT BACKGROUND (Deep Black, Subtle Blue, & Green) */
 /* ========================================================================= */
 .atmospheric-bg {
   position: fixed;
@@ -113,59 +113,27 @@
   overflow: hidden;
   background-color: var(--bg-app);
   background-image:
-    radial-gradient(circle at 18% 15%, rgba(233, 95, 112, 0.16) 0%, transparent 48%),
-    radial-gradient(circle at 82% 20%, rgba(82, 141, 235, 0.20) 0%, transparent 55%),
-    radial-gradient(circle at 52% 52%, rgba(231, 194, 94, 0.12) 0%, transparent 42%),
-    radial-gradient(circle at 24% 82%, rgba(71, 185, 130, 0.16) 0%, transparent 50%),
-    radial-gradient(circle at 75% 85%, rgba(82, 141, 235, 0.14) 0%, transparent 45%);
+    radial-gradient(circle at 18% 20%, rgba(30, 64, 175, 0.18) 0%, transparent 52%),
+    radial-gradient(circle at 82% 16%, rgba(5, 150, 105, 0.16) 0%, transparent 54%),
+    radial-gradient(circle at 22% 80%, rgba(14, 116, 144, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(6, 10, 16, 0.88) 0%, transparent 60%);
 }
 
 [data-theme="light"] .atmospheric-bg, .light .atmospheric-bg {
-  background-color: #F8FAFC;
+  background-color: #F4F6F9;
   background-image:
-    radial-gradient(circle at 18% 15%, rgba(217, 107, 120, 0.06) 0%, transparent 48%),
-    radial-gradient(circle at 82% 20%, rgba(71, 127, 208, 0.08) 0%, transparent 55%),
-    radial-gradient(circle at 52% 52%, rgba(210, 168, 73, 0.05) 0%, transparent 42%),
-    radial-gradient(circle at 24% 82%, rgba(57, 155, 115, 0.06) 0%, transparent 50%),
-    radial-gradient(circle at 75% 85%, rgba(71, 127, 208, 0.05) 0%, transparent 45%);
+    radial-gradient(circle at 18% 18%, rgba(37, 99, 235, 0.05) 0%, transparent 52%),
+    radial-gradient(circle at 82% 20%, rgba(5, 150, 105, 0.05) 0%, transparent 52%),
+    radial-gradient(circle at 28% 85%, rgba(15, 23, 42, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 75% 85%, rgba(5, 150, 105, 0.03) 0%, transparent 48%);
 }
 
 /* ========================================================================= */
-/* UNIVERSAL FOUR-COLOUR BUTTON OUTLINE (Red -> Yellow -> Blue -> Green) */
+/* CLEAN FUNCTIONAL BORDERS (Coloured borders removed) */
 /* ========================================================================= */
 .btn-quad-border {
   position: relative;
-  isolation: isolate;
-  background-clip: padding-box;
-}
-
-.btn-quad-border::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, var(--accent-red) 0%, var(--accent-yellow) 33%, var(--accent-blue) 66%, var(--accent-green) 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-  transition: opacity 0.2s ease, filter 0.2s ease;
-  opacity: 0.85;
-}
-
-.btn-quad-border:hover::before {
-  opacity: 1;
-  filter: brightness(1.15);
-}
-
-.btn-quad-border:active::before {
-  opacity: 1;
-  filter: brightness(0.95);
-}
-
-.btn-quad-border:disabled::before {
-  opacity: 0.35;
+  border-color: var(--border-divider);
 }
 
 

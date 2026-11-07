@@ -33,13 +33,30 @@ export const PaperCard: React.FC<PaperCardProps> = ({
             <span>{paper.grade}</span>
             <span aria-hidden="true" className="text-[var(--text-muted)] opacity-60">·</span>
             <span className="font-mono text-[11px] text-[var(--text-muted)]">{paper.year}</span>
+            {paper.eventName && (
+              <>
+                <span aria-hidden="true" className="text-[var(--text-muted)] opacity-60">·</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] font-medium">
+                  {paper.eventName}
+                </span>
+              </>
+            )}
+            {paper.isImageBased ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-green-bg)] text-[var(--color-green)] font-semibold border border-[var(--color-green)]/20">
+                📷 {paper.pageCount || paper.imageUrls?.length || 1} P
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-secondary)] text-[var(--text-muted)] font-mono border border-[var(--border-divider)]">
+                PDF
+              </span>
+            )}
           </div>
 
           {onBookmark && (
             <button
               type="button"
               onClick={(e) => onBookmark(paper, e)}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer btn-quad-border ${
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 isBookmarked
                   ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
@@ -74,7 +91,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
 
         {/* Subject & Description */}
         <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
-          {paper.description || `${paper.subject} previous year question paper with marking scheme.`}
+          {paper.description || `${paper.subject} previous year question paper.`}
         </p>
       </div>
 
@@ -95,10 +112,14 @@ export const PaperCard: React.FC<PaperCardProps> = ({
             </div>
           )}
 
-          <span aria-hidden="true" className="text-[var(--text-muted)] opacity-50">·</span>
-          <span className="text-xs text-[var(--text-muted)] font-mono">
-            {paper.totalMarks}M
-          </span>
+          {paper.totalMarks && paper.totalMarks > 0 && (
+            <>
+              <span aria-hidden="true" className="text-[var(--text-muted)] opacity-50">·</span>
+              <span className="text-xs text-[var(--text-muted)] font-mono">
+                {paper.totalMarks}M
+              </span>
+            </>
+          )}
         </div>
 
         {/* Compact Action Buttons */}
@@ -107,7 +128,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
             <button
               type="button"
               onClick={(e) => onAddToProject(paper, e)}
-              className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--accent-blue)] transition-colors cursor-pointer btn-quad-border"
+              className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--accent-blue)] transition-colors cursor-pointer shadow-xs"
               title="Add to Study Project"
               aria-label="Add to Study Project"
             >
@@ -119,8 +140,8 @@ export const PaperCard: React.FC<PaperCardProps> = ({
             <button
               type="button"
               onClick={(e) => onDownload(paper, e)}
-              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer btn-quad-border"
-              title="Download PDF"
+              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+              title={paper.isImageBased ? 'Download Photo' : 'Download PDF'}
               aria-label="Download paper"
             >
               <Download className="w-3 h-3" />
@@ -131,7 +152,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           <button
             type="button"
             onClick={() => onSelect(paper)}
-            className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 shadow-xs cursor-pointer btn-quad-border"
+            className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 shadow-xs cursor-pointer"
           >
             <span>View</span>
             <ArrowUpRight className="w-3 h-3" />

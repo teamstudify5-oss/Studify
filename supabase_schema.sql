@@ -403,3 +403,73 @@ begin
     alter publication supabase_realtime add table public.notes;
   end if;
 end $$;
+
+-- ------------------------------------------------------------------------------
+-- 8. OVERALL APP FEEDBACK & STAR RATING (Guest / Visitor Accessible)
+-- Separate from PYQ ratings; no account required
+-- ------------------------------------------------------------------------------
+create table if not exists public.app_feedback (
+  id uuid primary key default gen_random_uuid(),
+  visitor_id text not null,
+  rating integer not null check (rating >= 1 and rating <= 5),
+  comment text default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint app_feedback_visitor_unique unique (visitor_id)
+);
+
+alter table public.app_feedback enable row level security;
+
+drop policy if exists "Anyone can read app feedback" on public.app_feedback;
+create policy "Anyone can read app feedback"
+  on public.app_feedback for select
+  using (true);
+
+drop policy if exists "Anyone can insert or update their own app feedback" on public.app_feedback;
+create policy "Anyone can insert or update their own app feedback"
+  on public.app_feedback for insert
+  with check (true);
+
+drop policy if exists "Visitors can update their app feedback" on public.app_feedback;
+create policy "Visitors can update their app feedback"
+  on public.app_feedback for update
+  using (true)
+  with check (true);
+
+-- ------------------------------------------------------------------------------
+-- 9. PDF DOWNLOAD QUOTAS & CONTRIBUTION TRACKING
+-- 10 free downloads -> upload 2 valid PDFs -> unlock 10 more downloads
+-- ------------------------------------------------------------------------------
+create table if not exists public.user_download_quotas (
+  id uuid primary key default gen_random_uuid(),
+  identifier text not null unique,
+  user_id uuid references auth.users(id) on delete cascade,
+  visitor_id text not null,
+  downloads_used integer not null default 0,
+  downloads_allowed integer not null default 10,
+  uploads_completed integer not null default 0,
+  current_cycle_uploads integer not null default 0,
+  upload_hashes text[] not null default '{}'::text[],
+  download_history jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_download_quotas enable row level security;
+
+drop policy if exists "Anyone can read their own download quota" on public.user_download_quotas;
+create policy "Anyone can read their own download quota"
+  on public.user_download_quotas for select
+  using (true);
+
+drop policy if exists "Anyone can create their own download quota" on public.user_download_quotas;
+create policy "Anyone can create their own download quota"
+  on public.user_download_quotas for insert
+  with check (true);
+
+drop policy if exists "Anyone can update their own download quota" on public.user_download_quotas;
+create policy "Anyone can update their own download quota"
+  on public.user_download_quotas for update
+  using (true)
+  with check (true);
+

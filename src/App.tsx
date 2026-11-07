@@ -21,6 +21,8 @@ import { CommandCenter } from './components/workspace/CommandCenter';
 import { QuickCaptureModal } from './components/workspace/QuickCaptureModal';
 import { workspaceService } from './services/workspaceService';
 import { supabaseStorage } from './services/supabaseStorage';
+import { DownloadLimitModal } from './components/DownloadLimitModal';
+import { downloadQuotaService, DownloadQuota } from './services/downloadQuotaService';
 
 function MainApp() {
   const { isAuthenticated, openAuthModal } = useAuth();
@@ -36,6 +38,24 @@ function MainApp() {
   const [isCommandCenterOpen, setIsCommandCenterOpen] = useState<boolean>(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState<boolean>(false);
   const [selectedWorkspaceProjectId, setSelectedWorkspaceProjectId] = useState<string | undefined>(undefined);
+
+  // Feature 2: PDF Download Quota State
+  const [isDownloadLimitModalOpen, setIsDownloadLimitModalOpen] = useState<boolean>(false);
+  const [downloadQuota, setDownloadQuota] = useState<DownloadQuota | null>(null);
+
+  useEffect(() => {
+    downloadQuotaService.getQuota().then(setDownloadQuota);
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          downloadQuotaService.mergeAnonymousQuotaIntoUser(user.id).then(setDownloadQuota);
+        }
+      });
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const loaded = storageService.getPapers();
@@ -154,8 +174,26 @@ function MainApp() {
   const handleDownloadPaper = async (paper: Paper, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
+    // Feature 2: Enforce download quota (10 free downloads limit)
+    const quotaCheck = await downloadQuotaService.canDownload();
+    setDownloadQuota(quotaCheck.quota);
+
+    if (!quotaCheck.allowed) {
+      setIsDownloadLimitModalOpen(true);
+      return;
+    }
+
     storageService.recordDownload(paper.id);
     setPapers(storageService.getPapers());
+
+    // Record completed download against server-side quota
+    const recordResult = await downloadQuotaService.recordSuccessfulDownload(paper.id, paper.title);
+    setDownloadQuota(recordResult.quota);
+
+    const remainingNotice =
+      recordResult.quota.remainingDownloads > 0
+        ? `(${recordResult.quota.remainingDownloads} free downloads left)`
+        : '(10/10 downloads used)';
 
     // If paper has a public or storage fileUrl, download it directly
     if (paper.fileUrl) {
@@ -169,7 +207,7 @@ function MainApp() {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          showToast('Download started');
+          showToast(`Download started ${remainingNotice}`);
           return;
         }
 
@@ -183,7 +221,7 @@ function MainApp() {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          showToast('Download started');
+          showToast(`Download started ${remainingNotice}`);
           return;
         }
       } catch (err) {
@@ -209,13 +247,16 @@ function MainApp() {
       )
       .join('\n');
 
+    const marksLine = paper.totalMarks && paper.totalMarks > 0 ? `Total Marks: ${paper.totalMarks}\n` : '';
+    const timeLine = paper.timeAllowedMinutes && paper.timeAllowedMinutes > 0 ? `Time: ${paper.timeAllowedMinutes / 60} Hours\n` : '';
+
     const fileContent =
       `${paper.examBoard.toUpperCase()} — ${paper.grade}\n` +
       `Subject: ${paper.subject} (${paper.year})\n` +
       `Title: ${paper.title}\n` +
-      `Total Marks: ${paper.totalMarks}\n` +
-      `Time: ${paper.timeAllowedMinutes / 60} Hours\n\n` +
-      `============================================================\n` +
+      marksLine +
+      timeLine +
+      `\n============================================================\n` +
       questionsText +
       `\n\n============================================================\n` +
       `Downloaded from Studify (100% Free Study Repository)\n`;
@@ -230,7 +271,7 @@ function MainApp() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast('Download started');
+    showToast(`Download started ${remainingNotice}`);
   };
 
   const handlePaperSubmitted = (newPaper: Paper) => {
@@ -484,6 +525,23 @@ function MainApp() {
         onClose={() => setIsLoginRequiredOpen(false)}
         onSignIn={() => openAuthModal('login')}
         onCreateAccount={() => openAuthModal('signup')}
+      />
+
+      {/* Feature 2: PDF Download Quota Exhausted & Contribution Unlock Modal */}
+      <DownloadLimitModal
+        isOpen={isDownloadLimitModalOpen}
+        onClose={() => setIsDownloadLimitModalOpen(false)}
+        quota={downloadQuota}
+        isAuthenticated={isAuthenticated}
+        onNavigateToUpload={() => {
+          setIsDownloadLimitModalOpen(false);
+          setCurrentTab('upload');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onRequireLogin={() => {
+          setIsDownloadLimitModalOpen(false);
+          setIsLoginRequiredOpen(true);
+        }}
       />
 
       {/* Floating Toast Notification */}

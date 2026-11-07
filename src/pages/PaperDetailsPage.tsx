@@ -14,7 +14,8 @@ import {
   Flag, 
   Edit2, 
   Trash2,
-  MessageSquare
+  MessageSquare,
+  X
 } from 'lucide-react';
 import { Paper } from '../types';
 import { PaperViewer } from '../components/PaperViewer';
@@ -48,7 +49,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   isBookmarked,
   onRequireLogin,
 }) => {
-  const { currentUser, isAuthenticated } = useAuth();
+  const { currentUser, isAuthenticated, isOwner } = useAuth();
   const [currentPaper, setCurrentPaper] = useState<Paper>(paper);
 
   // Ratings & reviews state
@@ -75,6 +76,48 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   // Edit submission state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const isUploader = Boolean(currentUser?.id && currentPaper.submittedBy?.id === currentUser.id);
+  const isAdmin = Boolean(isOwner || currentUser?.email?.toLowerCase().trim() === 'teamstudify5@gmail.com');
+
+  // Admin removal state
+  const [isAdminRemoveModalOpen, setIsAdminRemoveModalOpen] = useState(false);
+  const [adminRemovalReason, setAdminRemovalReason] = useState('');
+  const [isRemovingAdmin, setIsRemovingAdmin] = useState(false);
+  const [adminRemoveError, setAdminRemoveError] = useState<string | null>(null);
+
+  const handleAdminRemoval = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminRemovalReason.trim()) {
+      setAdminRemoveError('Please enter a reason before confirming removal.');
+      return;
+    }
+    setIsRemovingAdmin(true);
+    setAdminRemoveError(null);
+    try {
+      const res = await communityPyqService.removeCommunityPyqByAdmin(
+        currentPaper.id,
+        adminRemovalReason.trim(),
+        currentUser?.email || 'teamstudify5@gmail.com'
+      );
+      if (!res.success || res.error) {
+        throw res.error || new Error('Failed to remove paper.');
+      }
+
+      setCurrentPaper((prev) => ({
+        ...prev,
+        status: 'removed',
+        removalReason: adminRemovalReason.trim(),
+        removedBy: currentUser?.email || 'teamstudify5@gmail.com',
+        removedAt: new Date().toISOString(),
+      }));
+
+      setIsAdminRemoveModalOpen(false);
+      setReportToast('Paper marked as Removed by Administrator.');
+    } catch (err: any) {
+      setAdminRemoveError(err.message || 'Removal failed. Please check network.');
+    } finally {
+      setIsRemovingAdmin(false);
+    }
+  };
 
   const handleDeleteSubmission = async () => {
     if (!window.confirm('Are you sure you want to delete this community submission? This cannot be undone.')) return;
@@ -229,6 +272,19 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             </>
           )}
 
+          {/* Administrator Remove Control */}
+          {isAdmin && currentPaper.status !== 'removed' && (
+            <button
+              type="button"
+              onClick={() => setIsAdminRemoveModalOpen(true)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Administrator: Remove paper from library with mandatory reason"
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Admin Remove</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setIsReportModalOpen(true)}
@@ -273,6 +329,19 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         </div>
       </div>
 
+      {/* Moderation Warning Banner for Removed Papers */}
+      {currentPaper.status === 'removed' && (
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 space-y-1 shadow-xs animate-in fade-in">
+          <div className="font-bold flex items-center gap-2 text-sm">
+            <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>Removed by Administrator</span>
+          </div>
+          <div className="text-xs text-[var(--text-secondary)] whitespace-pre-line pl-6 font-mono">
+            Reason: {currentPaper.removalReason || 'Violated community guidelines or copyright'}
+          </div>
+        </div>
+      )}
+
       {/* Document Header Card */}
       <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-7 space-y-4 shadow-xs">
         {/* Metadata Strip */}
@@ -302,17 +371,21 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           {currentPaper.description || `${currentPaper.subject} previous year examination paper with full question structure and official marking scheme.`}
         </p>
 
-        {/* Technical Specs Strip */}
+        {/* Technical Specs Strip - Strictly conditional, NO assumed marks or duration */}
         <div className="pt-3 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-4 text-[var(--text-secondary)] font-mono text-[11px]">
-            <div className="flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
-              <span>{currentPaper.totalMarks} Marks</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[var(--color-green)]" />
-              <span>{currentPaper.timeAllowedMinutes / 60} Hours</span>
-            </div>
+            {currentPaper.totalMarks && currentPaper.totalMarks > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                <span>{currentPaper.totalMarks} Marks</span>
+              </div>
+            ) : null}
+            {currentPaper.timeAllowedMinutes && currentPaper.timeAllowedMinutes > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-[var(--color-green)]" />
+                <span>{currentPaper.timeAllowedMinutes / 60} Hours</span>
+              </div>
+            ) : null}
             <div className="flex items-center gap-1 text-[var(--color-yellow)]">
               <Star className={`w-3.5 h-3.5 ${currentPaper.rating ? 'fill-current' : 'opacity-40'}`} />
               <span>
@@ -657,6 +730,76 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
           }}
         />
+      )}
+
+      {/* Studify Team Administrator Removal Modal */}
+      {isAdminRemoveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-500" />
+                <span>Remove Paper as Administrator</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdminRemoveModalOpen(false);
+                  setAdminRemoveError(null);
+                }}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              This action will unpublish the paper from the public library and display the official administrator removal notice with your entered reason.
+            </p>
+
+            <form onSubmit={handleAdminRemoval} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                  Mandatory Reason for Removal *
+                </label>
+                <textarea
+                  value={adminRemovalReason}
+                  onChange={(e) => setAdminRemovalReason(e.target.value)}
+                  placeholder="e.g. Copyright infringement / Low scan quality / Inappropriate content"
+                  rows={3}
+                  required
+                  className="w-full p-2.5 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-rose-500 placeholder-[var(--text-muted)]"
+                />
+              </div>
+
+              {adminRemoveError && (
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                  {adminRemoveError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminRemoveModalOpen(false);
+                    setAdminRemoveError(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRemovingAdmin || !adminRemovalReason.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-xs transition-opacity"
+                >
+                  {isRemovingAdmin ? 'Removing...' : 'Confirm Removal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

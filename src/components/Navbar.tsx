@@ -14,7 +14,8 @@ import {
   Folder,
   Zap,
   Moon,
-  Sun
+  Sun,
+  Star
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -82,6 +83,24 @@ export const Navbar: React.FC<NavbarProps> = ({
       onRequireLogin();
     } else {
       setCurrentTab('profile-bookmarks');
+    }
+  };
+
+  const handleRateAppClick = () => {
+    setIsLeftMenuOpen(false);
+    const scrollAndOpen = () => {
+      const el = document.getElementById('app-performance-feedback');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      window.dispatchEvent(new CustomEvent('open-studify-feedback'));
+    };
+
+    if (currentTab !== 'home') {
+      setCurrentTab('home');
+      setTimeout(scrollAndOpen, 150);
+    } else {
+      scrollAndOpen();
     }
   };
 
@@ -165,6 +184,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Actions: Theme Toggle + User Identity */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Home Page Star Rating Redirect (Only on Home Page, star symbol only) */}
+            {currentTab === 'home' && (
+              <button
+                type="button"
+                onClick={handleRateAppClick}
+                className="p-2 sm:px-2.5 sm:py-2 rounded-xl bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-amber-400 hover:text-amber-300 transition-all flex items-center justify-center cursor-pointer shadow-xs group"
+                title="Rate Studify"
+                aria-label="Rate Studify"
+              >
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400 group-hover:scale-110 transition-transform" />
+              </button>
+            )}
+
             {/* Theme Toggle Button */}
             <button
               type="button"
@@ -185,9 +217,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] btn-quad-border text-xs font-medium text-[var(--text-primary)] transition-all cursor-pointer"
+                  className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-[var(--surface-elevated-solid)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-primary)] transition-all cursor-pointer shadow-xs"
                 >
-                  <div className="w-6 h-6 rounded-lg bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] flex items-center justify-center font-bold text-[10px]">
+                  <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shadow-xs shrink-0">
                     {currentUser?.avatarInitials}
                   </div>
                   <span className="max-w-[70px] sm:max-w-[100px] truncate hidden sm:inline">{currentUser?.name.split(' ')[0]}</span>
@@ -529,9 +561,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={() => handleNavClick('profile')}
-                className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--surface-elevated)] transition-all text-left cursor-pointer group btn-quad-border"
+                className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--surface-elevated)] transition-all text-left cursor-pointer group border border-[var(--border-divider)]"
               >
-                <div className="w-9 h-9 rounded-xl bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] border border-[var(--border-divider)] flex items-center justify-center font-bold text-xs shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
                   {currentUser.avatarInitials}
                 </div>
                 <div className="min-w-0 flex-1">

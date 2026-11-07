@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, BookOpen, Bookmark, UploadCloud, ArrowRight, Star, CheckCircle2 } from 'lucide-react';
 import { Paper } from '../types';
+import { AppPerformanceFeedbackSection } from '../components/AppPerformanceFeedbackSection';
 
 interface LandingPageProps {
   onNavigateToSearch: () => void;
@@ -42,7 +43,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {/* Supporting Text */}
             <p className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed max-w-xl mx-auto lg:mx-0">
-              Browse authentic previous year question papers, solutions, and historical chapter weightages for CBSE, ICSE, JEE, and NEET. Completely free with no paywalls.
+              Browse authentic previous year question papers and historical chapter weightages for CBSE, ICSE, JEE, and NEET. Completely free with no paywalls.
             </p>
 
             {/* Actions: Side-by-side alignment, compact and purposeful */}
@@ -66,7 +67,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
 
             {/* Academic Notice */}
-            <div className="pt-2 flex items-center justify-center lg:justify-start gap-4 text-xs text-[var(--text-secondary)]">
+            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-4 text-xs text-[var(--text-secondary)]">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-green)]" />
                 <span>100% Free Public Access</span>
@@ -74,7 +75,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="text-[var(--border-divider)]">·</span>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
-                <span>PDFs & Step-by-Step Solutions</span>
+                <span>Free PDFs</span>
               </div>
             </div>
           </div>
@@ -115,7 +116,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                     <div className="mt-2.5 pt-2 border-t border-[var(--border-divider)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
                       <span className="font-mono text-[11px] text-[var(--text-muted)]">
-                        {paper.totalMarks} Marks · {paper.subject}
+                        {paper.totalMarks && paper.totalMarks > 0 ? `${paper.totalMarks} Marks · ` : ''}{paper.subject}
                       </span>
                       <span className="text-[var(--accent-blue)] font-medium hover:underline text-[11px] flex items-center gap-0.5">
                         <span>View Paper</span>
@@ -203,6 +204,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
+      {/* App Performance & User Experience Rating (Accessible to all students without account) */}
+      <div id="app-performance-feedback">
+        <AppPerformanceFeedbackSection />
+      </div>
+
       {/* Call to Action Banner */}
       <section className="px-4 sm:px-6 max-w-4xl mx-auto">
         <div className="rounded-2xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] p-8 sm:p-10 text-center space-y-4 shadow-sm">
@@ -211,7 +217,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </h3>
 
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed">
-            Access past question papers and solutions directly in your browser. No paywalls, no forced logins.
+            Access past question papers directly in your browser. No paywalls, no forced logins.
           </p>
 
           <div className="pt-2">
