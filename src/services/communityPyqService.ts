@@ -3,6 +3,13 @@ import { Paper, ExamBoard, GradeLevel } from '../types';
 
 export const COMMUNITY_BUCKET = 'community-pyqs';
 
+export const toOptionalPositiveInteger = (value?: number): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.trunc(value);
+};
+
 export interface CommunityPyqRow {
   id: string;
   uploader_id: string;
@@ -14,8 +21,8 @@ export interface CommunityPyqRow {
   year: number;
   chapter: string | null;
   description: string | null;
-  total_marks: number;
-  time_allowed_minutes: number;
+  total_marks: number | null;
+  time_allowed_minutes: number | null;
   file_name: string;
   file_path: string;
   file_url: string;
@@ -291,7 +298,10 @@ export const communityPyqService = {
         }
 
         // Insert ONE single PYQ database record
-        const payload = {
+        const totalMarks = toOptionalPositiveInteger(input.totalMarks);
+        const timeAllowedMinutes = toOptionalPositiveInteger(input.timeAllowedMinutes);
+
+        const payload: Record<string, any> = {
           uploader_id: user.id,
           uploader_display_name: uploaderDisplayName,
           title: input.title.trim(),
@@ -301,8 +311,8 @@ export const communityPyqService = {
           year: Number(input.year),
           chapter: input.chapter?.trim() || '',
           description: input.description?.trim() || '',
-          total_marks: input.totalMarks && input.totalMarks > 0 ? Number(input.totalMarks) : null,
-          time_allowed_minutes: input.timeAllowedMinutes && input.timeAllowedMinutes > 0 ? Number(input.timeAllowedMinutes) : null,
+          ...(totalMarks !== undefined ? { total_marks: totalMarks } : {}),
+          ...(timeAllowedMinutes !== undefined ? { time_allowed_minutes: timeAllowedMinutes } : {}),
           file_name: `${files.length} Pages (Images)`,
           file_path: uploadedPaths[0],
           file_url: imageUrls[0],
@@ -391,7 +401,10 @@ export const communityPyqService = {
 
       const publicUrl = urlData.publicUrl;
 
-      const payload = {
+      const totalMarks = toOptionalPositiveInteger(input.totalMarks);
+      const timeAllowedMinutes = toOptionalPositiveInteger(input.timeAllowedMinutes);
+
+      const payload: Record<string, any> = {
         uploader_id: user.id,
         uploader_display_name: uploaderDisplayName,
         title: input.title.trim(),
@@ -401,8 +414,8 @@ export const communityPyqService = {
         year: Number(input.year),
         chapter: input.chapter?.trim() || '',
         description: input.description?.trim() || '',
-        total_marks: input.totalMarks && input.totalMarks > 0 ? Number(input.totalMarks) : null,
-        time_allowed_minutes: input.timeAllowedMinutes && input.timeAllowedMinutes > 0 ? Number(input.timeAllowedMinutes) : null,
+        ...(totalMarks !== undefined ? { total_marks: totalMarks } : {}),
+        ...(timeAllowedMinutes !== undefined ? { time_allowed_minutes: timeAllowedMinutes } : {}),
         file_name: input.fileName || rawName,
         file_path: storagePath,
         file_url: publicUrl,
@@ -446,8 +459,14 @@ export const communityPyqService = {
       if (updates.year !== undefined) payload.year = Number(updates.year);
       if (updates.chapter !== undefined) payload.chapter = updates.chapter.trim();
       if (updates.description !== undefined) payload.description = updates.description.trim();
-      if (updates.totalMarks !== undefined) payload.total_marks = updates.totalMarks && updates.totalMarks > 0 ? Number(updates.totalMarks) : null;
-      if (updates.timeAllowedMinutes !== undefined) payload.time_allowed_minutes = updates.timeAllowedMinutes && updates.timeAllowedMinutes > 0 ? Number(updates.timeAllowedMinutes) : null;
+      if (updates.totalMarks !== undefined) {
+        const val = toOptionalPositiveInteger(updates.totalMarks);
+        if (val !== undefined) payload.total_marks = val;
+      }
+      if (updates.timeAllowedMinutes !== undefined) {
+        const val = toOptionalPositiveInteger(updates.timeAllowedMinutes);
+        if (val !== undefined) payload.time_allowed_minutes = val;
+      }
       if (updates.tags !== undefined) payload.tags = updates.tags;
       if (updates.uploaderDisplayName !== undefined) payload.uploader_display_name = updates.uploaderDisplayName.trim();
 

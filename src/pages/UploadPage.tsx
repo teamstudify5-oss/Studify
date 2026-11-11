@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
+import { UploadCloud, CheckCircle2, Lock, AlertCircle, X, Camera } from 'lucide-react';
 import { ExamBoard, GradeLevel, Paper } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storage';
-import { EXAM_BOARDS, GRADE_LEVELS, POPULAR_SUBJECTS, YEARS } from '../data/samplePapers';
+import { EXAM_BOARDS, GRADE_LEVELS } from '../data/samplePapers';
 import { supabase } from '../supabaseClient.js';
 import { communityPyqService } from '../services/communityPyqService';
 import { downloadQuotaService, DownloadQuota } from '../services/downloadQuotaService';
@@ -13,6 +13,12 @@ interface UploadPageProps {
   onNavigateToSubmissions: () => void;
   onNavigateToBrowse?: () => void;
   onRedirectToLogin?: () => void;
+}
+
+interface SelectedPhotoItem {
+  id: string;
+  file: File;
+  previewUrl: string;
 }
 
 export const UploadPage: React.FC<UploadPageProps> = ({
@@ -38,21 +44,17 @@ export const UploadPage: React.FC<UploadPageProps> = ({
     });
   }, [onRedirectToLogin]);
 
+  // Upload method: 'pdf' or 'images'
   const [uploadMethod, setUploadMethod] = useState<'pdf' | 'images'>('pdf');
+
+  // Essential metadata fields only
   const [examBoard, setExamBoard] = useState<ExamBoard>('CBSE');
   const [grade, setGrade] = useState<GradeLevel>('Class 12');
   const [subject, setSubject] = useState('Physics');
-  const [eventName, setEventName] = useState('');
-  const [year, setYear] = useState<number>(2024);
-  const [chapter, setChapter] = useState('');
-  const [description, setDescription] = useState('');
-  const [totalMarksInput, setTotalMarksInput] = useState('');
-  const [timeAllowedInput, setTimeAllowedInput] = useState('');
+  const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [title, setTitle] = useState('');
 
-  // Title state defaults directly to "Sample" without auto-generated label
-  const [title, setTitle] = useState('Sample');
-
-  // PDF upload state
+  // Single PDF upload state
   const [selectedFile, setSelectedFile] = useState<{
     name: string;
     size: number;
@@ -60,28 +62,30 @@ export const UploadPage: React.FC<UploadPageProps> = ({
   } | null>(null);
   const [actualFile, setActualFile] = useState<File | null>(null);
 
-  // Multi-image upload state
-  interface ImagePageItem {
-    id: string;
-    file: File;
-    previewUrl: string;
-  }
-  const [imagePages, setImagePages] = useState<ImagePageItem[]>([]);
-  const [activePreviewPageIndex, setActivePreviewPageIndex] = useState<number>(0);
+  // Simple multi-image upload state (no page tabs, no page management)
+  const [selectedPhotos, setSelectedPhotos] = useState<SelectedPhotoItem[]>([]);
 
+  // Submission & quota state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Feature 2: PDF download quota and contribution unlocking states
-  const [quota, setQuota] = useState<DownloadQuota | null>(null);
   const [hasRightsConfirmed, setHasRightsConfirmed] = useState(false);
+
+  // Quota & contribution tracking
+  const [quota, setQuota] = useState<DownloadQuota | null>(null);
   const [unlockCelebration, setUnlockCelebration] = useState<string | null>(null);
 
   useEffect(() => {
     downloadQuotaService.getQuota().then(setQuota);
   }, []);
+
+  // Cleanup object URLs to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      selectedPhotos.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, [selectedPhotos]);
 
   if (!isAuthenticated) {
     return (
@@ -108,6 +112,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
     );
   }
 
+  // Handle PDF file selection
   const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -116,7 +121,6 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         return;
       }
 
-      // Feature 2: Validate genuine PDF format (%PDF- header), not just file extension
       const check = await downloadQuotaService.validatePdfMagicBytes(file);
       if (!check.isValid) {
         setErrorMessage(check.error || 'The selected file is not a valid PDF document.');
@@ -135,69 +139,73 @@ export const UploadPage: React.FC<UploadPageProps> = ({
     }
   };
 
-  const handleAddImageFiles = (files: FileList | File[]) => {
-    const newItems: ImagePageItem[] = [];
+  // Add photographs from file picker or camera
+  const handleAddPhotoFiles = (files: FileList | File[]) => {
+    const newItems: SelectedPhotoItem[] = [];
+    const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (file.size > 15 * 1024 * 1024) {
-        setErrorMessage(`Photo "${file.name}" exceeds 15MB size limit.`);
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+      if (!ALLOWED_EXTENSIONS.includes(ext) && !file.type.startsWith('image/')) {
+        setErrorMessage(`"${file.name}" has an unsupported format. Only JPG, PNG, and WEBP photographs are permitted.`);
         continue;
       }
+
+      if (file.size > 15 * 1024 * 1024) {
+        setErrorMessage(`Photograph "${file.name}" exceeds the 15MB limit.`);
+        continue;
+      }
+
       const previewUrl = URL.createObjectURL(file);
       newItems.push({
-        id: `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        id: `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
         file,
         previewUrl,
       });
     }
 
-    if (imagePages.length + newItems.length > 25) {
-      setErrorMessage('Maximum of 25 pages allowed per paper.');
+    if (selectedPhotos.length + newItems.length > 25) {
+      setErrorMessage('A maximum of 25 photographs can be uploaded per paper.');
       return;
     }
 
-    setImagePages((prev) => [...prev, ...newItems]);
+    setSelectedPhotos((prev) => [...prev, ...newItems]);
     setErrorMessage(null);
   };
 
-  const handleRemoveImagePage = (indexToRemove: number) => {
-    setImagePages((prev) => {
-      const item = prev[indexToRemove];
-      if (item) URL.revokeObjectURL(item.previewUrl);
-      const updated = prev.filter((_, idx) => idx !== indexToRemove);
-      if (activePreviewPageIndex >= updated.length) {
-        setActivePreviewPageIndex(Math.max(0, updated.length - 1));
+  // Remove a photograph by id
+  const handleRemovePhoto = (idToRemove: string) => {
+    setSelectedPhotos((prev) => {
+      const target = prev.find((p) => p.id === idToRemove);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
       }
-      return updated;
+      return prev.filter((p) => p.id !== idToRemove);
     });
   };
 
-  const handleMovePage = (index: number, direction: 'up' | 'down') => {
-    setImagePages((prev) => {
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
-      const copy = [...prev];
-      const temp = copy[index];
-      copy[index] = copy[targetIndex];
-      copy[targetIndex] = temp;
-      return copy;
-    });
-  };
-
+  // Form submission handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!title.trim()) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
       setErrorMessage('Please provide a paper title.');
       return;
     }
-    if (!subject.trim()) {
-      setErrorMessage('Please specify the subject.');
+
+    const trimmedSubject = subject.trim();
+    if (!trimmedSubject) {
+      setErrorMessage('Please enter the subject name.');
       return;
     }
-    if (!year || isNaN(Number(year))) {
-      setErrorMessage('Please enter a valid examination year.');
+
+    const numericYear = Number(year);
+    if (!numericYear || isNaN(numericYear) || numericYear < 1980 || numericYear > 2035) {
+      setErrorMessage('Please enter a valid examination year (e.g. 2024).');
       return;
     }
 
@@ -207,8 +215,8 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         return;
       }
     } else {
-      if (imagePages.length === 0) {
-        setErrorMessage('Please add at least one photograph / page of the question paper.');
+      if (selectedPhotos.length === 0) {
+        setErrorMessage('Please add at least one photograph of the question paper.');
         return;
       }
     }
@@ -219,27 +227,23 @@ export const UploadPage: React.FC<UploadPageProps> = ({
     }
 
     setIsSubmitting(true);
-    setUploadProgress(uploadMethod === 'images' ? `Uploading ${imagePages.length} photograph pages...` : 'Uploading file to storage...');
+    setUploadProgress(
+      uploadMethod === 'images'
+        ? `Uploading ${selectedPhotos.length} ${selectedPhotos.length === 1 ? 'photograph' : 'photographs'}...`
+        : 'Uploading PDF to storage...'
+    );
 
     try {
-      const parsedMarks = totalMarksInput.trim() ? Number(totalMarksInput.trim()) : undefined;
-      const parsedDuration = timeAllowedInput.trim() ? Number(timeAllowedInput.trim()) : undefined;
-
       const { paper, error } = await communityPyqService.uploadCommunityPyq({
         isImageBased: uploadMethod === 'images',
-        files: uploadMethod === 'images' ? imagePages.map((p) => p.file) : undefined,
+        files: uploadMethod === 'images' ? selectedPhotos.map((p) => p.file) : undefined,
         file: uploadMethod === 'pdf' ? (actualFile || undefined) : undefined,
-        fileName: uploadMethod === 'pdf' ? selectedFile?.name : `${imagePages.length} Pages (Images)`,
-        title: title.trim(),
-        subject: subject.trim(),
+        fileName: uploadMethod === 'pdf' ? selectedFile?.name : `${selectedPhotos.length} Pages (Images)`,
+        title: trimmedTitle,
+        subject: trimmedSubject,
         examBoard,
         grade,
-        year: Number(year),
-        eventName: eventName.trim() || undefined,
-        chapter: chapter.trim() || undefined,
-        description: description.trim() || '',
-        totalMarks: parsedMarks && !isNaN(parsedMarks) ? parsedMarks : undefined,
-        timeAllowedMinutes: parsedDuration && !isNaN(parsedDuration) ? parsedDuration : undefined,
+        year: numericYear,
         uploaderDisplayName: currentUser?.name || 'Academic Contributor',
       });
 
@@ -247,17 +251,15 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         throw error || new Error('Upload could not be processed.');
       }
 
-      // Feature 2: If user uploaded a valid PDF, credit their contribution towards unlocking downloads
+      // If user uploaded a valid PDF, credit contribution
       if (uploadMethod === 'pdf' && actualFile) {
         const hash = await downloadQuotaService.computeFileHash(actualFile);
         const contrib = await downloadQuotaService.recordPdfContribution(hash, paper.id);
 
         if (contrib.unlocked) {
-          setUnlockCelebration('🎉 Contribution Goal Completed! You uploaded 2 valid PDFs. 10 new downloads unlocked!');
+          setUnlockCelebration('Contribution Goal Completed! You uploaded 2 valid PDFs. 10 new downloads unlocked!');
         } else if (contrib.success) {
-          setUnlockCelebration('✅ 1/2 PDFs uploaded! Upload 1 more unique PDF to unlock your next 10 downloads.');
-        } else if (contrib.error) {
-          console.warn('Duplicate contribution hash notice:', contrib.error);
+          setUnlockCelebration('1/2 PDFs uploaded! Upload 1 more unique PDF to unlock your next 10 downloads.');
         }
         setQuota(contrib.quota);
       }
@@ -298,6 +300,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
             Download Unlock Progress: {quota.currentCycleUploads}/2 PDFs uploaded
           </div>
         ) : null}
+
         <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
           {onNavigateToBrowse && (
             <button
@@ -321,13 +324,11 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               setSubmissionSuccess(false);
               setSelectedFile(null);
               setActualFile(null);
-              setImagePages([]);
-              setTitle('Sample');
-              setEventName('');
-              setDescription('');
-              setChapter('');
-              setTotalMarksInput('');
-              setTimeAllowedInput('');
+              selectedPhotos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+              setSelectedPhotos([]);
+              setTitle('');
+              setHasRightsConfirmed(false);
+              setErrorMessage(null);
             }}
             className="px-4 py-2 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors cursor-pointer"
           >
@@ -379,7 +380,10 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         <div className="flex rounded-xl bg-[var(--surface-elevated)] p-1 border border-[var(--border-divider)] mb-4">
           <button
             type="button"
-            onClick={() => setUploadMethod('pdf')}
+            onClick={() => {
+              setUploadMethod('pdf');
+              setErrorMessage(null);
+            }}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
               uploadMethod === 'pdf'
                 ? 'bg-[var(--accent-blue)] text-white shadow-xs'
@@ -391,22 +395,25 @@ export const UploadPage: React.FC<UploadPageProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setUploadMethod('images')}
+            onClick={() => {
+              setUploadMethod('images');
+              setErrorMessage(null);
+            }}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
               uploadMethod === 'images'
                 ? 'bg-[var(--accent-blue)] text-white shadow-xs'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <span className="font-mono text-xs">📷</span>
-            <span>Upload Photographs (Camera / Gallery)</span>
+            <Camera className="w-3.5 h-3.5" />
+            <span>Upload Photographs</span>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-          {/* Metadata Grid: Only Class and Board remain dropdowns */}
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* Metadata Grid: Exam Board and Class Level */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Exam Board - Retains Dropdown */}
+            {/* Exam Board / Organization */}
             <div>
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 Exam Board / Organization
@@ -422,7 +429,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               </select>
             </div>
 
-            {/* Class / Grade - Retains Dropdown */}
+            {/* Class / Grade Level */}
             <div>
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 Class / Grade Level
@@ -437,8 +444,11 @@ export const UploadPage: React.FC<UploadPageProps> = ({
                 ))}
               </select>
             </div>
+          </div>
 
-            {/* Subject - Manually Editable Text Input */}
+          {/* Subject and Year */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Subject Name */}
             <div>
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 Subject Name *
@@ -453,7 +463,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               />
             </div>
 
-            {/* Examination Year - Manually Editable Text/Number Input */}
+            {/* Examination Year */}
             <div>
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 Examination Year *
@@ -462,8 +472,8 @@ export const UploadPage: React.FC<UploadPageProps> = ({
                 type="number"
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                min={1990}
-                max={2030}
+                min={1980}
+                max={2035}
                 placeholder="e.g. 2024"
                 className="w-full px-2.5 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
                 required
@@ -471,21 +481,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
             </div>
           </div>
 
-          {/* Exam / Event Name - Manually Editable Text Input */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-              Exam or Event Name <span className="text-[11px] font-normal text-[var(--text-muted)]">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              placeholder="e.g. Mid-Term Exam, Session 1, Annual Board Exam"
-              className="w-full px-3 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
-            />
-          </div>
-
-          {/* Paper Title - Shows "Sample" directly, no "Auto Generated" label */}
+          {/* Paper Title (Required, clean empty default) */}
           <div>
             <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
               Paper Title *
@@ -494,79 +490,19 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Sample"
+              placeholder="e.g. Annual Examination 2024"
               className="w-full px-3 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               required
             />
           </div>
 
-          {/* Chapter / Topic Scope */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-              Chapter / Topic Scope <span className="text-[11px] font-normal text-[var(--text-muted)]">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={chapter}
-              onChange={(e) => setChapter(e.target.value)}
-              placeholder="e.g. Full Syllabus, Term 2 Units, or Electrostatics"
-              className="w-full px-3 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
-            />
-          </div>
-
-          {/* Optional Marks & Duration - No assumed values */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                Total Marks <span className="text-[11px] font-normal text-[var(--text-muted)]">(optional)</span>
-              </label>
-              <input
-                type="number"
-                value={totalMarksInput}
-                onChange={(e) => setTotalMarksInput(e.target.value)}
-                placeholder="Leave blank if unspecified"
-                min={1}
-                max={500}
-                className="w-full px-2.5 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                Duration in Minutes <span className="text-[11px] font-normal text-[var(--text-muted)]">(optional)</span>
-              </label>
-              <input
-                type="number"
-                value={timeAllowedInput}
-                onChange={(e) => setTimeAllowedInput(e.target.value)}
-                placeholder="Leave blank if unspecified"
-                min={10}
-                max={600}
-                className="w-full px-2.5 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
-              />
-            </div>
-          </div>
-
-          {/* Description or Notes */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-              Description or Notes <span className="text-[11px] font-normal text-[var(--text-muted)]">(optional)</span>
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              placeholder="Notes on paper shift, difficulty, or marking instructions..."
-              className="w-full px-3 py-1.5 text-xs bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
-            />
-          </div>
-
           {/* ============================================================== */}
-          {/* UPLOAD METHOD A: SINGLE PDF UPLOAD                             */}
+          {/* FILE SELECTION: SINGLE PDF UPLOAD                              */}
           {/* ============================================================== */}
           {uploadMethod === 'pdf' && (
             <div>
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                Upload Document File (.pdf) <span className="text-[var(--color-red)]">*</span>
+                Select PDF Document *
               </label>
 
               <div className="border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] rounded-xl p-5 text-center bg-[var(--surface-elevated)] transition-colors cursor-pointer">
@@ -600,135 +536,105 @@ export const UploadPage: React.FC<UploadPageProps> = ({
           )}
 
           {/* ============================================================== */}
-          {/* UPLOAD METHOD B: MULTIPLE IMAGE UPLOAD / CAMERA PHOTOS         */}
+          {/* FILE SELECTION: MULTIPLE PHOTOGRAPHS                           */}
           {/* ============================================================== */}
           {uploadMethod === 'images' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-medium text-[var(--text-secondary)]">
-                  Question Paper Pages / Photos <span className="text-[var(--color-red)]">*</span>
-                </label>
-                <span className="text-[11px] text-[var(--text-muted)]">
-                  {imagePages.length} {imagePages.length === 1 ? 'page' : 'pages'} added
-                </span>
-              </div>
+              <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                Select Photographs (Camera / Gallery) *
+              </label>
 
-              {/* Page Strip: Page 1 | Page 2 | Page 3 | + Add Another Page */}
-              {imagePages.length > 0 && (
-                <div className="p-3 bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-xl space-y-3">
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                    {imagePages.map((_, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setActivePreviewPageIndex(idx)}
-                        className={`px-3 py-1 rounded-lg font-mono text-xs transition-colors shrink-0 cursor-pointer ${
-                          activePreviewPageIndex === idx
-                            ? 'bg-[var(--accent-blue)] text-white font-semibold'
-                            : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        }`}
-                      >
-                        Page {idx + 1}
-                      </button>
-                    ))}
-                    <label
-                      htmlFor="camera-more-input"
-                      className="px-2.5 py-1 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] hover:opacity-90 font-medium text-xs transition-colors shrink-0 cursor-pointer flex items-center gap-1"
-                    >
-                      <span>+ Add Another Page</span>
-                    </label>
-                  </div>
-
-                  {/* Active Page Card Preview */}
-                  {imagePages[activePreviewPageIndex] && (
-                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-2.5 bg-[var(--surface-main)] rounded-lg border border-[var(--border-divider)]">
-                      <img
-                        src={imagePages[activePreviewPageIndex].previewUrl}
-                        alt={`Page ${activePreviewPageIndex + 1}`}
-                        className="w-20 h-28 object-cover rounded-md border border-[var(--border-divider)] shadow-xs"
-                      />
-                      <div className="flex-1 space-y-1 text-xs">
-                        <div className="font-semibold text-[var(--text-primary)]">
-                          Page {activePreviewPageIndex + 1} of {imagePages.length}
-                        </div>
-                        <div className="text-[11px] text-[var(--text-muted)] truncate max-w-xs">
-                          {imagePages[activePreviewPageIndex].file.name} · {(imagePages[activePreviewPageIndex].file.size / 1024).toFixed(0)} KB
-                        </div>
-                        <div className="pt-1 flex items-center gap-2">
-                          {activePreviewPageIndex > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handleMovePage(activePreviewPageIndex, 'up')}
-                              className="px-2 py-0.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] rounded text-[11px] text-[var(--text-primary)] cursor-pointer"
-                            >
-                              ← Move Left
-                            </button>
-                          )}
-                          {activePreviewPageIndex < imagePages.length - 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleMovePage(activePreviewPageIndex, 'down')}
-                              className="px-2 py-0.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] rounded text-[11px] text-[var(--text-primary)] cursor-pointer"
-                            >
-                              Move Right →
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImagePage(activePreviewPageIndex)}
-                            className="px-2 py-0.5 bg-[var(--accent-red-bg)] text-[var(--color-red)] hover:opacity-90 rounded text-[11px] cursor-pointer"
-                          >
-                            Remove Page
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Upload Controls for Images: Camera & File Picker */}
+              {/* Photo Input Controls: Camera & Device Gallery */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {/* Take Photo / Mobile Camera */}
-                <div className="border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] rounded-xl p-4 text-center bg-[var(--surface-elevated)] transition-colors cursor-pointer">
+                {/* Take Photo with Phone Camera */}
+                <div className="border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] rounded-xl p-3.5 text-center bg-[var(--surface-elevated)] transition-colors cursor-pointer">
                   <input
                     type="file"
                     id="camera-photo-input"
                     accept="image/*"
                     capture="environment"
                     onChange={(e) => {
-                      if (e.target.files) handleAddImageFiles(e.target.files);
+                      if (e.target.files) handleAddPhotoFiles(e.target.files);
                       e.target.value = '';
                     }}
                     className="hidden"
                   />
                   <label htmlFor="camera-photo-input" className="cursor-pointer block space-y-1">
-                    <span className="text-xl block">📷</span>
+                    <Camera className="w-5 h-5 text-[var(--accent-blue)] mx-auto" />
                     <span className="text-xs font-semibold text-[var(--text-primary)] block">Take Photo with Camera</span>
-                    <span className="text-[10px] text-[var(--text-muted)] block">Use your phone to photograph each question page</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">Photograph each page directly</span>
                   </label>
                 </div>
 
-                {/* Choose from Gallery / Files */}
-                <div className="border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] rounded-xl p-4 text-center bg-[var(--surface-elevated)] transition-colors cursor-pointer">
+                {/* Choose multiple photos from device */}
+                <div className="border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] rounded-xl p-3.5 text-center bg-[var(--surface-elevated)] transition-colors cursor-pointer">
                   <input
                     type="file"
-                    id="camera-more-input"
+                    id="gallery-photo-input"
                     accept="image/png,image/jpeg,image/jpg,image/webp"
                     multiple
                     onChange={(e) => {
-                      if (e.target.files) handleAddImageFiles(e.target.files);
+                      if (e.target.files) handleAddPhotoFiles(e.target.files);
                       e.target.value = '';
                     }}
                     className="hidden"
                   />
-                  <label htmlFor="camera-more-input" className="cursor-pointer block space-y-1">
+                  <label htmlFor="gallery-photo-input" className="cursor-pointer block space-y-1">
                     <UploadCloud className="w-5 h-5 text-[var(--accent-blue)] mx-auto" />
-                    <span className="text-xs font-semibold text-[var(--text-primary)] block">Select Photos from Device</span>
-                    <span className="text-[10px] text-[var(--text-muted)] block">Choose multiple page pictures at once</span>
+                    <span className="text-xs font-semibold text-[var(--text-primary)] block">Choose from Device</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">Select multiple photos together</span>
                   </label>
                 </div>
               </div>
+
+              {/* Dynamic Photo Count and Simple Responsive Thumbnail Grid */}
+              {selectedPhotos.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-xs font-medium text-[var(--text-secondary)]">
+                    <span className="font-semibold text-[var(--accent-blue)]">
+                      {selectedPhotos.length} {selectedPhotos.length === 1 ? 'photo' : 'photos'} added
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectedPhotos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+                        setSelectedPhotos([]);
+                      }}
+                      className="text-[11px] text-[var(--color-red)] hover:underline cursor-pointer"
+                    >
+                      Remove all
+                    </button>
+                  </div>
+
+                  {/* Responsive grid of thumbnails with remove icons */}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5 p-3 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-divider)] max-h-60 overflow-y-auto">
+                    {selectedPhotos.map((photo, index) => (
+                      <div
+                        key={photo.id}
+                        className="relative group rounded-lg overflow-hidden border border-[var(--border-divider)] bg-[var(--surface-main)] aspect-[3/4] flex items-center justify-center shadow-xs"
+                      >
+                        <img
+                          src={photo.previewUrl}
+                          alt={`Uploaded page ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(photo.id)}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/75 hover:bg-rose-600 text-white transition-colors cursor-pointer shadow-sm"
+                          title="Remove photo"
+                          aria-label={`Remove photo ${index + 1}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5 text-[9px] text-white font-mono truncate text-center">
+                          {(photo.file.size / 1024).toFixed(0)} KB
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -749,18 +655,23 @@ export const UploadPage: React.FC<UploadPageProps> = ({
                 className="mt-0.5 rounded border-[var(--border-divider)] text-[var(--accent-blue)] focus:ring-0 cursor-pointer"
                 required
               />
-              <span className="leading-relaxed">
-                I confirm I have the right to share this educational question paper with the Studify student community and that the uploaded file is authentic.
+              <span>
+                I confirm that this is an authentic past question paper and I have the right to contribute it for student reference.
               </span>
             </label>
           </div>
 
+          {/* Submit Action Button */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs disabled:opacity-50 mt-3 cursor-pointer"
+            className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer btn-quad-border"
           >
-            {isSubmitting ? 'Uploading & Verifying...' : 'Publish Paper to Library'}
+            {isSubmitting ? (
+              <span>Publishing Paper...</span>
+            ) : (
+              <span>Publish Paper</span>
+            )}
           </button>
         </form>
       </div>
