@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Save, AlertCircle } from 'lucide-react';
 import { Paper, ExamBoard, GradeLevel } from '../types';
 import { EXAM_BOARDS, GRADE_LEVELS, POPULAR_SUBJECTS, YEARS } from '../data/samplePapers';
 import { communityPyqService } from '../services/communityPyqService';
@@ -29,67 +30,52 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const isSubmittingRef = useRef(isSubmitting);
 
-  if (!isOpen) return null;
+  onCloseRef.current = onClose;
+  isSubmittingRef.current = isSubmitting;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Keep local fields synchronized whenever the modal opens or target paper props update
+  useEffect(() => {
+    if (!isOpen) return;
+    setTitle(paper.title);
+    setSubject(paper.subject);
+    setGrade(paper.grade);
+    setExamBoard(paper.examBoard);
+    setYear(paper.year);
+    setChapter(paper.chapter || '');
+    setDescription(paper.description || '');
+    setTotalMarks(paper.totalMarks || '');
+    setTimeAllowedMinutes(paper.timeAllowedMinutes || '');
     setErrorMessage(null);
+  }, [
+    isOpen,
+    paper.id,
+    paper.title,
+    paper.subject,
+    paper.grade,
+    paper.examBoard,
+    paper.year,
+    paper.chapter,
+    paper.description,
+    paper.totalMarks,
+    paper.timeAllowedMinutes,
+  ]);
 
-    if (!title.trim()) {
-      setErrorMessage('Title is required.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    const parsedMarks = totalMarks ? Number(totalMarks) : undefined;
-    const parsedDuration = timeAllowedMinutes ? Number(timeAllowedMinutes) : undefined;
-
-    const updates = {
-      title: title.trim(),
-      subject,
-      grade,
-      examBoard,
-      year: Number(year),
-      chapter: chapter.trim() || undefined,
-      description: description.trim() || '',
-      totalMarks: parsedMarks && !isNaN(parsedMarks) ? parsedMarks : undefined,
-      timeAllowedMinutes: parsedDuration && !isNaN(parsedDuration) ? parsedDuration : undefined,
-      tags: [examBoard, grade, subject, String(year)],
-    };
-
-    const { success, error } = await communityPyqService.updateCommunityPyq(paper.id, updates);
-
-    setIsSubmitting(false);
-    if (!success || error) {
-      setErrorMessage(error?.message || 'Failed to update paper metadata.');
-      return;
-    }
-
-    const updatedPaper: Paper = {
-      ...paper,
-      ...updates,
-      chapter: updates.chapter,
-    };
-
-    onUpdated(updatedPaper);
-    onClose();
-  };
-
-  const modalRef = React.useRef<HTMLDivElement>(null);
-  const triggerRef = React.useRef<HTMLElement | null>(null);
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
-      triggerRef.current = document.activeElement as HTMLElement;
+      triggerRef.current = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
       const timer = setTimeout(() => {
         const input = modalRef.current?.querySelector<HTMLInputElement>('input');
         input?.focus();
       }, 50);
 
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onClose();
+        if (e.key === 'Escape' && !isSubmittingRef.current) {
+          onCloseRef.current();
         } else if (e.key === 'Tab') {
           const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
             'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -115,13 +101,78 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
       };
     } else if (triggerRef.current) {
       triggerRef.current.focus();
+      triggerRef.current = null;
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
-  return (
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    setErrorMessage(null);
+
+    if (!title.trim()) {
+      setErrorMessage('Title is required.');
+      return;
+    }
+
+    const marksStr = String(totalMarks).trim();
+    const durationStr = String(timeAllowedMinutes).trim();
+    const parsedMarks = marksStr ? Number(marksStr) : null;
+    const parsedDuration = durationStr ? Number(durationStr) : null;
+
+    if (parsedMarks !== null && (!Number.isInteger(parsedMarks) || parsedMarks <= 0)) {
+      setErrorMessage('Total marks must be a positive whole number, or leave blank.');
+      return;
+    }
+
+    if (parsedDuration !== null && (!Number.isInteger(parsedDuration) || parsedDuration <= 0)) {
+      setErrorMessage('Time allowed must be a positive whole number (minutes), or leave blank.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const updates = {
+      title: title.trim(),
+      subject,
+      grade,
+      examBoard,
+      year: Number(year),
+      chapter: chapter.trim() || undefined,
+      description: description.trim() || '',
+      totalMarks: parsedMarks,
+      timeAllowedMinutes: parsedDuration,
+      tags: [examBoard, grade, subject, String(year)],
+    };
+
+    const { success, error } = await communityPyqService.updateCommunityPyq(paper.id, updates);
+
+    setIsSubmitting(false);
+    if (!success || error) {
+      setErrorMessage(error?.message || 'Failed to update paper metadata.');
+      return;
+    }
+
+    const updatedPaper: Paper = {
+      ...paper,
+      ...updates,
+      totalMarks: parsedMarks ?? undefined,
+      timeAllowedMinutes: parsedDuration ?? undefined,
+      chapter: updates.chapter,
+    };
+
+    onUpdated(updatedPaper);
+    onClose();
+  };
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
+      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      onClick={() => {
+        if (!isSubmitting) onClose();
+      }}
       role="presentation"
     >
       <div
@@ -135,8 +186,12 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
         <div className="flex items-center justify-between pb-3 border-b border-[var(--border-divider)]">
           <h2 id="edit-paper-title" className="text-base font-semibold text-[var(--text-primary)]">Edit Community Submission</h2>
           <button
-            onClick={onClose}
-            className="btn-quad-border p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => {
+              if (!isSubmitting) onClose();
+            }}
+            className="btn-quad-border p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer disabled:opacity-40"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
@@ -275,7 +330,7 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] font-medium transition-colors cursor-pointer border border-[var(--border-divider)] shadow-xs"
+              className="px-4 py-2 rounded-xl bg-[var(--surface-secondary)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] font-medium transition-colors cursor-pointer border border-[var(--border-divider)] shadow-xs disabled:opacity-40"
             >
               Cancel
             </button>
@@ -298,4 +353,10 @@ export const EditCommunityPyqModal: React.FC<EditCommunityPyqModalProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 };

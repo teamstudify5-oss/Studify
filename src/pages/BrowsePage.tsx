@@ -4,6 +4,11 @@ import { Paper, FilterState } from '../types';
 import { PaperCard } from '../components/PaperCard';
 import { EXAM_BOARDS, GRADE_LEVELS, POPULAR_SUBJECTS, YEARS } from '../data/samplePapers';
 import { AddToProjectModal } from '../components/workspace/AddToProjectModal';
+import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
+import { communityPyqService } from '../services/communityPyqService';
+import { storageService } from '../services/storage';
 
 interface BrowsePageProps {
   papers: Paper[];
@@ -11,7 +16,10 @@ interface BrowsePageProps {
   onSelectPaper: (paper: Paper) => void;
   onDownloadPaper: (paper: Paper, e: React.MouseEvent) => void;
   onBookmarkPaper: (paper: Paper, e: React.MouseEvent) => void;
+  onPaperUpdated?: (updated: Paper) => void;
+  onPaperDeleted?: (id: string) => void;
   savedPaperIds: string[];
+  downloadingPaperIds?: Set<string>;
 }
 
 export const BrowsePage: React.FC<BrowsePageProps> = ({
@@ -20,8 +28,13 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
   onSelectPaper,
   onDownloadPaper,
   onBookmarkPaper,
+  onPaperUpdated,
+  onPaperDeleted,
   savedPaperIds,
+  downloadingPaperIds,
 }) => {
+  const { currentUser } = useAuth();
+
   // Active papers are immediately visible to anyone
   const visiblePapers = useMemo(
     () => papers.filter((p) => p.status === 'active' || p.status === 'approved'),
@@ -35,6 +48,10 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
   const [selectedYear, setSelectedYear] = useState(initialFilters?.year || 'all');
   const [sortBy, setSortBy] = useState<'latest' | 'popular' | 'rating' | 'yearDesc' | 'yearAsc'>('latest');
   const [selectedPaperForProject, setSelectedPaperForProject] = useState<Paper | null>(null);
+  const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
+  const [confirmDeletePaper, setConfirmDeletePaper] = useState<Paper | null>(null);
+  const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const filteredPapers = useMemo(() => {
     return visiblePapers
@@ -107,19 +124,39 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
     setSortBy('latest');
   };
 
+  const handleConfirmDelete = async (paper: Paper) => {
+    if (deletingPaperId) return;
+
+    setDeletingPaperId(paper.id);
+    setDeleteError(null);
+    try {
+      const res = await communityPyqService.deleteCommunityPyq(paper.id, paper.filePath || paper.fileUrl);
+      if (!res.success || res.error) {
+        const failedDetail =
+          res.failedPaths && res.failedPaths.length > 0
+            ? ` Failed files: ${res.failedPaths.map((f) => f.path).join(', ')}`
+            : '';
+        setDeleteError((res.error?.message || 'Could not delete paper. Please try again.') + failedDetail);
+        return;
+      }
+
+      setConfirmDeletePaper(null);
+      onPaperDeleted?.(paper.id);
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Could not delete paper. Please try again.');
+    } finally {
+      setDeletingPaperId(null);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       {/* Header — Clean, minimal, no standalone emblem or motto banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 shadow-xs">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
-              Community PYQ Library
-            </h1>
-            <span className="text-[11px] font-medium text-[var(--color-green)]">
-              Verified
-            </span>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+            Community PYQ Library
+          </h1>
           <p className="text-xs text-[var(--text-secondary)]">
             Search, preview, and download authentic past examination papers. Completely free.
           </p>
@@ -260,17 +297,27 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
       {/* Paper Grid */}
       {filteredPapers.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-          {filteredPapers.map((paper) => (
-            <PaperCard
-              key={paper.id}
-              paper={paper}
-              onSelect={onSelectPaper}
-              onDownload={onDownloadPaper}
-              onBookmark={onBookmarkPaper}
-              onAddToProject={(p) => setSelectedPaperForProject(p)}
-              isBookmarked={savedPaperIds.includes(paper.id)}
-            />
-          ))}
+          {filteredPapers.map((paper) => {
+            const isUploader = Boolean(currentUser?.id && paper.submittedBy?.id === currentUser.id);
+            return (
+              <PaperCard
+                key={paper.id}
+                paper={paper}
+                canManage={isUploader}
+                onSelect={onSelectPaper}
+                onDownload={onDownloadPaper}
+                onBookmark={onBookmarkPaper}
+                onAddToProject={(p) => setSelectedPaperForProject(p)}
+                onEdit={(p) => setEditingPaper(p)}
+                onDelete={(p) => {
+                  setDeleteError(null);
+                  setConfirmDeletePaper(p);
+                }}
+                isBookmarked={savedPaperIds.includes(paper.id)}
+                isDownloading={Boolean(downloadingPaperIds?.has(paper.id))}
+              />
+            );
+          })}
         </div>
       ) : (
         <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-12 text-center space-y-3 shadow-xs">
@@ -300,6 +347,39 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
           onClose={() => setSelectedPaperForProject(null)}
           paper={selectedPaperForProject}
           onSuccess={() => setSelectedPaperForProject(null)}
+        />
+      )}
+
+      {/* Uploader Edit Modal */}
+      {editingPaper && (
+        <EditCommunityPyqModal
+          isOpen={true}
+          paper={editingPaper}
+          onClose={() => setEditingPaper(null)}
+          onUpdated={(updated) => {
+            setEditingPaper(null);
+            storageService.savePaper(updated);
+            onPaperUpdated?.(updated);
+          }}
+        />
+      )}
+
+      {/* Uploader Permanent Delete Confirmation */}
+      {confirmDeletePaper && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Delete Submission Permanently"
+          description={`Are you sure you want to permanently delete "${confirmDeletePaper.title}" and remove its stored files? This action cannot be undone.`}
+          confirmLabel="Delete Permanently"
+          isBusy={Boolean(deletingPaperId)}
+          errorMessage={deleteError}
+          onConfirm={() => handleConfirmDelete(confirmDeletePaper)}
+          onCancel={() => {
+            if (!deletingPaperId) {
+              setConfirmDeletePaper(null);
+              setDeleteError(null);
+            }
+          }}
         />
       )}
     </div>

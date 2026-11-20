@@ -16,28 +16,13 @@ create table if not exists public.user_roles (
 
 alter table public.user_roles enable row level security;
 
--- Repeatable policy definitions
-drop policy if exists "Users can read their own role" on public.user_roles;
-create policy "Users can read their own role"
-  on public.user_roles for select
-  using (auth.uid() = user_id);
-
-drop policy if exists "Admins can view all roles" on public.user_roles;
-create policy "Admins can view all roles"
-  on public.user_roles for select
-  using (
-    exists (
-      select 1 from public.user_roles r
-      where r.user_id = auth.uid() and r.role in ('owner', 'admin')
-    )
-  );
-
--- Helper security function for RLS checks
+-- Helper security function for RLS checks (defined first so user_roles policies never self-recurse)
 create or replace function public.is_admin(check_uid uuid default auth.uid())
 returns boolean
 language sql
 security definer
 stable
+set search_path = public, auth
 as $$
   select exists (
     select 1 from public.user_roles
@@ -50,6 +35,17 @@ as $$
     )
   );
 $$;
+
+-- Repeatable policy definitions
+drop policy if exists "Users can read their own role" on public.user_roles;
+create policy "Users can read their own role"
+  on public.user_roles for select
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Admins can view all roles" on public.user_roles;
+create policy "Admins can view all roles"
+  on public.user_roles for select
+  using (public.is_admin((select auth.uid())));
 
 -- ------------------------------------------------------------------------------
 -- 1. STUDY PROJECTS TABLE

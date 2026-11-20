@@ -58,26 +58,13 @@ function sanitizeComment(text: string): string {
 
 export const appFeedbackService = {
   /**
-   * Fetch real feedback summary from Supabase and local cache.
-   * Absolutely NO fabricated, fake, or pre-populated sample reviews!
+   * Fetch real feedback summary from Supabase.
+   * Never falls back to stale pre-reset localStorage entries when the remote source is empty or unavailable.
    */
   async getFeedbackSummary(): Promise<FeedbackSummary> {
     const visitorId = getVisitorId();
-    let localItems: AppFeedback[] = [];
+    let items: AppFeedback[] = [];
 
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          localItems = parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('Could not read local feedback', e);
-    }
-
-    // Try fetching real submissions from Supabase table
     try {
       const { data, error } = await supabase
         .from('app_feedback')
@@ -86,7 +73,7 @@ export const appFeedbackService = {
         .limit(50);
 
       if (!error && Array.isArray(data)) {
-        localItems = data.map((row: any) => ({
+        items = data.map((row: any) => ({
           id: row.id,
           visitorId: row.visitor_id,
           rating: Number(row.rating),
@@ -94,24 +81,31 @@ export const appFeedbackService = {
           createdAt: row.created_at,
           updatedAt: row.updated_at || row.created_at,
         }));
-        // Update local cache with real data
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(localItems));
+          if (items.length === 0) {
+            localStorage.removeItem(STORAGE_KEY);
+          } else {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+          }
+        } catch {
+          // ignore
+        }
+      } else {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
         } catch {
           // ignore
         }
       }
     } catch {
-      // Supabase table or network fallback: use localItems
+      items = [];
     }
 
-    // Identify current visitor's existing rating and comment
-    const userFeedback = localItems.find((item) => item.visitorId === visitorId);
-
-    const totalRatings = localItems.length;
+    const userFeedback = items.find((item) => item.visitorId === visitorId);
+    const totalRatings = items.length;
     const averageRating =
       totalRatings > 0
-        ? Number((localItems.reduce((acc, curr) => acc + curr.rating, 0) / totalRatings).toFixed(1))
+        ? Number((items.reduce((acc, curr) => acc + curr.rating, 0) / totalRatings).toFixed(1))
         : null;
 
     return {
@@ -119,7 +113,7 @@ export const appFeedbackService = {
       totalRatings,
       userRating: userFeedback ? userFeedback.rating : null,
       userComment: userFeedback ? userFeedback.comment : '',
-      items: localItems,
+      items,
     };
   },
 

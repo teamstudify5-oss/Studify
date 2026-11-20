@@ -44,9 +44,14 @@ export const supabaseDb = {
   /**
    * Load current authenticated user's projects from Supabase
    */
-  async loadProjects(): Promise<StudyProject[]> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+  async loadProjectsWithStatus(): Promise<{ projects: StudyProject[]; synced: boolean; error: Error | null }> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      return { projects: [], synced: false, error: new Error(authError.message) };
+    }
+    if (!user) {
+      return { projects: [], synced: true, error: null };
+    }
 
     const { data, error } = await supabase
       .from('study_projects')
@@ -56,10 +61,10 @@ export const supabaseDb = {
 
     if (error) {
       console.warn('Supabase loadProjects error:', error.message);
-      return [];
+      return { projects: [], synced: false, error: new Error(error.message) };
     }
 
-    return (data || []).map((row) => ({
+    const projects = (data || []).map((row) => ({
       id: row.id,
       title: row.title,
       subject: row.subject,
@@ -77,6 +82,13 @@ export const supabaseDb = {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
+
+    return { projects, synced: true, error: null };
+  },
+
+  async loadProjects(): Promise<StudyProject[]> {
+    const res = await this.loadProjectsWithStatus();
+    return res.projects;
   },
 
   /**
@@ -187,9 +199,14 @@ export const supabaseDb = {
   /**
    * Load user quick captures from Supabase
    */
-  async loadQuickCaptures(): Promise<QuickCaptureItem[]> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+  async loadQuickCapturesWithStatus(): Promise<{ captures: QuickCaptureItem[]; synced: boolean; error: Error | null }> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      return { captures: [], synced: false, error: new Error(authError.message) };
+    }
+    if (!user) {
+      return { captures: [], synced: true, error: null };
+    }
 
     const { data, error } = await supabase
       .from('quick_captures')
@@ -199,10 +216,10 @@ export const supabaseDb = {
 
     if (error) {
       console.warn('Supabase loadQuickCaptures error:', error.message);
-      return [];
+      return { captures: [], synced: false, error: new Error(error.message) };
     }
 
-    return (data || []).map((row) => ({
+    const captures = (data || []).map((row) => ({
       id: row.id,
       title: row.title,
       content: row.content,
@@ -212,6 +229,13 @@ export const supabaseDb = {
       createdAt: row.created_at,
       isResolved: row.is_resolved,
     }));
+
+    return { captures, synced: true, error: null };
+  },
+
+  async loadQuickCaptures(): Promise<QuickCaptureItem[]> {
+    const res = await this.loadQuickCapturesWithStatus();
+    return res.captures;
   },
 
   /**
@@ -302,9 +326,14 @@ export const supabaseDb = {
   /**
    * Load IDs of papers bookmarked by current user
    */
-  async loadSavedPaperIds(): Promise<string[]> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+  async loadSavedPaperIdsWithStatus(): Promise<{ ids: string[]; synced: boolean; error: Error | null }> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      return { ids: [], synced: false, error: new Error(authError.message) };
+    }
+    if (!user) {
+      return { ids: [], synced: true, error: null };
+    }
 
     const { data, error } = await supabase
       .from('saved_papers')
@@ -313,10 +342,19 @@ export const supabaseDb = {
 
     if (error) {
       console.warn('Supabase loadSavedPaperIds error:', error.message);
-      return [];
+      return { ids: [], synced: false, error: new Error(error.message) };
     }
 
-    return (data || []).map((row) => row.paper_id);
+    return {
+      ids: (data || []).map((row) => row.paper_id),
+      synced: true,
+      error: null,
+    };
+  },
+
+  async loadSavedPaperIds(): Promise<string[]> {
+    const res = await this.loadSavedPaperIdsWithStatus();
+    return res.ids;
   },
 
   /**
@@ -359,6 +397,30 @@ export const supabaseDb = {
     return true;
   },
 
+  /**
+   * Remove invalid/orphaned saved_papers rows for the signed-in user
+   * without affecting any other user data.
+   */
+  async pruneInvalidSavedPapers(invalidPaperIds: string[]): Promise<void> {
+    if (!invalidPaperIds || invalidPaperIds.length === 0) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('saved_papers')
+        .delete()
+        .eq('user_id', user.id)
+        .in('paper_id', invalidPaperIds);
+
+      if (error) {
+        console.warn('Supabase pruneInvalidSavedPapers notice:', error.message);
+      }
+    } catch {
+      // ignore
+    }
+  },
+
   // =========================================================================
   // 4. PAPERS (COMMUNITY & USER SUBMISSIONS)
   // =========================================================================
@@ -399,8 +461,8 @@ export const supabaseDb = {
       sections: row.sections || [],
       viewsCount: row.views_count || 0,
       downloadsCount: row.downloads_count || 0,
-      rating: Number(row.rating || 5.0),
-      ratingCount: row.rating_count || 1,
+      rating: row.rating ? Number(row.rating) : undefined,
+      ratingCount: row.rating_count ? Number(row.rating_count) : 0,
       reviews: row.reviews || [],
       comments: row.comments || [],
     }));
@@ -433,8 +495,8 @@ export const supabaseDb = {
       sections: paper.sections || [],
       views_count: paper.viewsCount || 0,
       downloads_count: paper.downloadsCount || 0,
-      rating: paper.rating || 5.0,
-      rating_count: paper.ratingCount || 1,
+      rating: paper.rating ?? null,
+      rating_count: paper.ratingCount ?? 0,
       reviews: paper.reviews || [],
       comments: paper.comments || [],
       created_at: paper.submittedAt || new Date().toISOString(),
@@ -483,34 +545,12 @@ export const supabaseDb = {
   },
 
   /**
-   * Delete paper (removes associated file from Supabase Storage and deletes database record)
+   * Delete paper (delegates exclusively to authoritative communityPyqService.deleteCommunityPyq)
    */
   async deletePaper(id: string): Promise<boolean> {
-    try {
-      const { data } = await supabase
-        .from('papers')
-        .select('file_url')
-        .eq('id', id)
-        .single();
-
-      if (data?.file_url) {
-        await supabaseStorage.deleteAppFile(data.file_url);
-      }
-    } catch (e) {
-      console.warn('Supabase storage check before delete note:', e);
-    }
-
-    const { error } = await supabase
-      .from('papers')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.warn('Supabase deletePaper error:', error.message);
-      return false;
-    }
-
-    return true;
+    const { communityPyqService } = await import('./communityPyqService');
+    const res = await communityPyqService.deleteCommunityPyq(id);
+    return res.success;
   },
 
   // =========================================================================
@@ -636,7 +676,8 @@ export const supabaseDb = {
   // =========================================================================
 
   /**
-   * Fetch real ratings from public.paper_ratings table and compute genuine average
+   * Fetch real ratings from public.paper_ratings table and compute genuine average.
+   * Never masks database errors as empty reviews.
    */
   async fetchPaperRatings(paperId: string): Promise<{
     rating?: number;
@@ -644,6 +685,7 @@ export const supabaseDb = {
     userRating?: number;
     userReviewText?: string;
     reviews: Array<{ id: string; stars: number; text?: string; authorName: string; createdAt: string; userId: string }>;
+    error: Error | null;
   }> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -655,12 +697,17 @@ export const supabaseDb = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Graceful fallback to paper row if paper_ratings table not yet provisioned in live DB
-        return { rating: undefined, ratingCount: 0, reviews: [] };
+        console.warn('fetchPaperRatings DB error:', error.message);
+        return {
+          rating: undefined,
+          ratingCount: 0,
+          reviews: [],
+          error: new Error(error.message),
+        };
       }
 
       if (!data || data.length === 0) {
-        return { rating: undefined, ratingCount: 0, reviews: [] };
+        return { rating: undefined, ratingCount: 0, reviews: [], error: null };
       }
 
       const totalStars = data.reduce((acc, row) => acc + Number(row.rating), 0);
@@ -692,10 +739,16 @@ export const supabaseDb = {
         userRating,
         userReviewText,
         reviews,
+        error: null,
       };
-    } catch (err) {
+    } catch (err: any) {
       console.warn('fetchPaperRatings error:', err);
-      return { rating: undefined, ratingCount: 0, reviews: [] };
+      return {
+        rating: undefined,
+        ratingCount: 0,
+        reviews: [],
+        error: err instanceof Error ? err : new Error(String(err)),
+      };
     }
   },
 
@@ -714,7 +767,8 @@ export const supabaseDb = {
         return { success: false, error: new Error('You must be signed in to rate this paper.') };
       }
 
-      if (rating < 1 || rating > 5) {
+      const cleanRating = Math.round(Number(rating));
+      if (!Number.isInteger(cleanRating) || cleanRating < 1 || cleanRating > 5) {
         return { success: false, error: new Error('Rating must be between 1 and 5 stars.') };
       }
 
@@ -723,19 +777,22 @@ export const supabaseDb = {
       const payload = {
         paper_id: paperId,
         user_id: user.id,
-        rating,
+        rating: cleanRating,
         review_text: reviewText?.trim() || null,
         user_display_name: author,
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('paper_ratings')
-        .upsert([payload], { onConflict: 'user_id,paper_id' });
+        .upsert([payload], { onConflict: 'user_id,paper_id' })
+        .select('id')
+        .single();
 
-      if (error) {
-        console.warn('submitPaperRating DB error:', error.message);
-        return { success: false, error: new Error(error.message) };
+      if (error || !data) {
+        const msg = error?.message || 'Could not confirm saved review in database.';
+        console.warn('submitPaperRating DB error:', msg);
+        return { success: false, error: new Error(msg) };
       }
 
       return { success: true, error: null };
@@ -808,7 +865,7 @@ export const supabaseDb = {
   /**
    * Fetch all moderation reports (Protected for Admins/Moderators)
    */
-  async fetchReports(): Promise<any[]> {
+  async fetchReportsWithStatus(): Promise<{ reports: any[]; synced: boolean; error: Error | null }> {
     try {
       const { data, error } = await supabase
         .from('paper_reports')
@@ -817,14 +874,19 @@ export const supabaseDb = {
 
       if (error) {
         console.warn('fetchReports error:', error.message);
-        return [];
+        return { reports: [], synced: false, error: new Error(error.message) };
       }
 
-      return data || [];
-    } catch (err) {
+      return { reports: data || [], synced: true, error: null };
+    } catch (err: any) {
       console.warn('fetchReports exception:', err);
-      return [];
+      return { reports: [], synced: false, error: err instanceof Error ? err : new Error(String(err)) };
     }
+  },
+
+  async fetchReports(): Promise<any[]> {
+    const res = await this.fetchReportsWithStatus();
+    return res.reports;
   },
 
   /**
@@ -875,37 +937,35 @@ export const supabaseDb = {
   },
 
   /**
-   * Takedown / Unpublish a document with recorded reason in audit trail
+   * Takedown / Unpublish a document reversibly via atomic `admin_remove_paper` RPC.
    */
   async takedownPaper(paperId: string, reason: string): Promise<{ success: boolean; error: Error | null }> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { success: false, error: new Error('Admin credentials required') };
 
-      // Update in papers table
-      await supabase
-        .from('papers')
-        .update({ status: 'rejected', rejection_reason: `Taken down: ${reason}` })
-        .eq('id', paperId);
+      const cleanReason = reason?.trim() || 'Removed following moderation review.';
 
-      // Update in community_pyqs table
-      await supabase
-        .from('community_pyqs')
-        .update({ status: 'taken_down', is_flagged: true })
-        .eq('id', paperId);
+      const { data, error } = await supabase.rpc('admin_remove_paper', {
+        p_paper_id: paperId,
+        p_reason: cleanReason,
+      });
 
-      // Record in audit log
+      if (error) {
+        return { success: false, error: new Error(error.message) };
+      }
+      if (data && typeof data === 'object' && (data as any).success === false) {
+        return { success: false, error: new Error((data as any).error || 'Submission not found or permission denied during takedown.') };
+      }
+
+      // Secondary optional cleanup of legacy papers table (non-fatal if absent)
       try {
-        await supabase.from('moderation_logs').insert([{
-          moderator_id: user.id,
-          action: 'takedown_paper',
-          target_type: 'paper',
-          target_id: paperId,
-          reason,
-          metadata: { paperId, takenDownAt: new Date().toISOString() }
-        }]);
-      } catch (logErr) {
-        console.warn('Could not record moderation log:', logErr);
+        await supabase
+          .from('papers')
+          .update({ status: 'rejected', rejection_reason: `Taken down: ${cleanReason}` })
+          .eq('id', paperId);
+      } catch {
+        // legacy table optional
       }
 
       return { success: true, error: null };
@@ -940,16 +1000,21 @@ export const supabaseDb = {
           updated_at: new Date().toISOString(),
         }]);
 
-      // Record in audit log
+      // Record in audit log (store moderatorEmail inside metadata JSONB matching live schema)
       try {
         await supabase.from('moderation_logs').insert([{
           moderator_id: user.id,
-          moderator_email: user.email,
           action: 'suspend_user',
           target_type: 'user',
           target_id: userId,
           reason,
-          metadata: { userId, userEmail, durationDays, suspendedUntil: until }
+          metadata: {
+            userId,
+            userEmail,
+            moderatorEmail: user.email,
+            durationDays,
+            suspendedUntil: until,
+          }
         }]);
       } catch (logErr) {
         console.warn('Could not record moderation log:', logErr);
@@ -1009,7 +1074,11 @@ export const supabaseDb = {
       }
 
       // 3. Fallback check for designated project owner email from environment
-      const ownerEmail = (import.meta.env.VITE_OWNER_EMAIL || 'teamstudify5@gmail.com').toLowerCase().trim();
+      const metaEnv =
+        typeof import.meta !== 'undefined' && (import.meta as any).env
+          ? (import.meta as any).env
+          : {};
+      const ownerEmail = (metaEnv.VITE_OWNER_EMAIL || 'teamstudify5@gmail.com').toLowerCase().trim();
       if (user.email && user.email.toLowerCase().trim() === ownerEmail) {
         return true;
       }

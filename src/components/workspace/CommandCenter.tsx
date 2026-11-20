@@ -74,14 +74,15 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
   const normalizedQuery = query.toLowerCase().trim();
 
-  // Filtered results
+  // Filtered results (only published papers appear in quick search)
   const matchingPapers = papers
     .filter(
       (p) =>
-        p.title.toLowerCase().includes(normalizedQuery) ||
-        p.subject.toLowerCase().includes(normalizedQuery) ||
-        p.examBoard.toLowerCase().includes(normalizedQuery) ||
-        String(p.year).includes(normalizedQuery)
+        (p.status === 'active' || p.status === 'approved') &&
+        (p.title.toLowerCase().includes(normalizedQuery) ||
+          p.subject.toLowerCase().includes(normalizedQuery) ||
+          p.examBoard.toLowerCase().includes(normalizedQuery) ||
+          String(p.year).includes(normalizedQuery))
     )
     .slice(0, 4);
 
@@ -174,7 +175,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                         {proj.title}
                       </div>
                       <div className="text-[11px] text-[#A7B4C8] truncate">
-                        {proj.subject ? `${proj.subject} · ` : ''}{proj.paperIds.length} attached papers · {proj.tasks.filter((t) => t.completed).length}/{proj.tasks.length} tasks
+                        {proj.subject ? `${proj.subject} · ` : ''}{proj.paperIds.filter((id) => papers.some((p) => p.id === id)).length} attached papers · {proj.tasks.filter((t) => t.completed).length}/{proj.tasks.length} tasks
                       </div>
                     </div>
                   </div>

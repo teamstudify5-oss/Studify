@@ -11,12 +11,17 @@ import {
   FileText,
   UserX,
   RefreshCw,
+  RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
 import { Paper } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storage';
+import { communityPyqService } from '../services/communityPyqService';
+import { clearStudifyContentCaches } from '../services/localCacheReset';
 import { supabaseDb, DbReport, DbModerationLog } from '../services/supabaseDb';
 import { supabase } from '../supabaseClient.js';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface AdminPageProps {
   papers: Paper[];
@@ -33,9 +38,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   onSelectPaper,
   onRedirectToLogin,
 }) => {
-  const { currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'reports' | 'submissions' | 'logs'>('reports');
+  const { currentUser, isOwner } = useAuth();
+  const [activeTab, setActiveTab] = useState<'reports' | 'submissions' | 'removed' | 'logs'>('reports');
   const [submissionFilter, setSubmissionFilter] = useState<'pending' | 'all'>('pending');
+
+  // Full moderation catalog (pending, rejected, active, removed)
+  const [moderationPapers, setModerationPapers] = useState<Paper[]>(papers);
+  const [removedPapers, setRemovedPapers] = useState<Paper[]>([]);
+  const [isLoadingModeration, setIsLoadingModeration] = useState(false);
+
+  // Restore confirmation dialog state
+  const [confirmRestorePaper, setConfirmRestorePaper] = useState<Paper | null>(null);
+  const [restoringPaperId, setRestoringPaperId] = useState<string | null>(null);
 
   // Reports state
   const [reports, setReports] = useState<DbReport[]>([]);
@@ -58,6 +72,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [suspensionDays, setSuspensionDays] = useState<number>(7);
 
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [actionErrorMsg, setActionErrorMsg] = useState<string | null>(null);
+  const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
+  const [confirmDeletePaper, setConfirmDeletePaper] = useState<Paper | null>(null);
+
+  // Owner-only Factory Reset modal state
+  const [isFactoryResetOpen, setIsFactoryResetOpen] = useState(false);
+  const [factoryResetPreview, setFactoryResetPreview] = useState<any | null>(null);
+  const [isLoadingResetPreview, setIsLoadingResetPreview] = useState(false);
+  const [isExecutingReset, setIsExecutingReset] = useState(false);
+  const [resetConfirmationInput, setResetConfirmationInput] = useState('');
+  const [resetPreserveModeration, setResetPreserveModeration] = useState(false);
+  const [factoryResetError, setFactoryResetError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -73,6 +99,30 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       }
     });
   }, [onRedirectToLogin]);
+
+  const loadModerationPapers = async () => {
+    setIsLoadingModeration(true);
+    try {
+      const [allMod, removedList] = await Promise.all([
+        communityPyqService.fetchAdminModerationPyqs(),
+        communityPyqService.fetchAdminRemovedPyqs(),
+      ]);
+      if (allMod.length > 0 || papers.length === 0) {
+        setModerationPapers(allMod);
+      } else {
+        setModerationPapers(papers);
+      }
+      setRemovedPapers(
+        removedList.length > 0
+          ? removedList
+          : allMod.filter((p) => p.status === 'removed' || p.isRemoved)
+      );
+    } catch (err) {
+      console.error('Failed to load moderation queue', err);
+    } finally {
+      setIsLoadingModeration(false);
+    }
+  };
 
   const loadReports = async () => {
     setIsLoadingReports(true);
@@ -100,110 +150,271 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
   useEffect(() => {
     loadReports();
+    loadModerationPapers();
   }, []);
 
   const showToast = (msg: string) => {
+    setActionErrorMsg(null);
     setActionSuccessMsg(msg);
     setTimeout(() => setActionSuccessMsg(null), 3500);
   };
 
-  const handleApprove = (paper: Paper) => {
-    const updated: Paper = {
-      ...paper,
-      status: 'approved',
-      rejectionReason: undefined,
-    };
-    storageService.savePaper(updated);
-    onPaperUpdated(updated);
+  const showError = (msg: string) => {
+    setActionErrorMsg(msg);
+  };
+
+  const handleOpenFactoryReset = async () => {
+    setIsFactoryResetOpen(true);
+    setFactoryResetPreview(null);
+    setFactoryResetError(null);
+    setResetConfirmationInput('');
+    setIsLoadingResetPreview(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('studify-factory-reset', {
+        body: { mode: 'preview' },
+      });
+      if (error) {
+        throw new Error(error.message || 'Could not reach factory reset Edge Function.');
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      setFactoryResetPreview(data);
+    } catch (err: any) {
+      setFactoryResetError(err?.message || 'Unable to load factory reset preview.');
+    } finally {
+      setIsLoadingResetPreview(false);
+    }
+  };
+
+  const handleExecuteFactoryReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetConfirmationInput !== 'RESET STUDIFY TEST DATA') {
+      setFactoryResetError('Please type RESET STUDIFY TEST DATA exactly to confirm.');
+      return;
+    }
+    setIsExecutingReset(true);
+    setFactoryResetError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('studify-factory-reset', {
+        body: {
+          mode: 'execute',
+          confirmationPhrase: resetConfirmationInput,
+          preserveModerationRecords: resetPreserveModeration,
+        },
+      });
+      if (error) {
+        throw new Error(error.message || 'Factory reset Edge Function request failed.');
+      }
+      if (!data?.success) {
+        const errDetails = Array.isArray(data?.errors) && data.errors.length > 0
+          ? data.errors.join('; ')
+          : data?.error || 'Factory reset completed with errors.';
+        throw new Error(errDetails);
+      }
+
+      clearStudifyContentCaches();
+      setIsFactoryResetOpen(false);
+      setResetConfirmationInput('');
+      loadReports();
+      loadModerationPapers();
+      loadAuditLogs();
+      showToast('Factory data reset completed. Auth users and schemas preserved.');
+    } catch (err: any) {
+      setFactoryResetError(err?.message || 'Factory reset failed.');
+    } finally {
+      setIsExecutingReset(false);
+    }
+  };
+
+  const handleApprove = async (paper: Paper) => {
+    setActionErrorMsg(null);
+    const res = await communityPyqService.updateCommunityPyqStatus(paper.id, 'approved');
+    if (res.error || !res.paper) {
+      showError(res.error?.message || `Could not approve "${paper.title}".`);
+      return;
+    }
+    storageService.savePaper(res.paper);
+    onPaperUpdated(res.paper);
+    loadModerationPapers();
     showToast(`Approved "${paper.title}"`);
   };
 
-  const handleConfirmReject = () => {
+  const handleConfirmReject = async () => {
     if (!rejectModalPaper) return;
-    const updated: Paper = {
-      ...rejectModalPaper,
-      status: 'rejected',
-      rejectionReason: rejectionReason.trim() || 'Did not meet quality standards.',
-    };
-    storageService.savePaper(updated);
-    onPaperUpdated(updated);
+    setActionErrorMsg(null);
+    const reason = rejectionReason.trim() || 'Did not meet quality standards.';
+    const res = await communityPyqService.updateCommunityPyqStatus(
+      rejectModalPaper.id,
+      'rejected',
+      reason
+    );
+    if (res.error || !res.paper) {
+      showError(res.error?.message || `Could not reject "${rejectModalPaper.title}".`);
+      return;
+    }
+    storageService.savePaper(res.paper);
+    onPaperUpdated(res.paper);
+    loadModerationPapers();
     showToast(`Rejected "${rejectModalPaper.title}"`);
     setRejectModalPaper(null);
     setRejectionReason('');
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Delete this submission permanently?')) {
-      storageService.deletePaper(id);
-      onPaperDeleted(id);
-      showToast('Paper deleted.');
+  const handleDelete = async (paper: Paper) => {
+    if (deletingPaperId) return;
+
+    setDeletingPaperId(paper.id);
+    setActionErrorMsg(null);
+    try {
+      const res = await communityPyqService.deleteCommunityPyq(paper.id, paper.filePath || paper.fileUrl);
+      if (!res.success || res.error) {
+        const failedDetail =
+          res.failedPaths && res.failedPaths.length > 0
+            ? ` Failed files: ${res.failedPaths.map((f) => f.path).join(', ')}`
+            : '';
+        showError((res.error?.message || 'Could not delete paper.') + failedDetail);
+        return;
+      }
+
+      setConfirmDeletePaper(null);
+      onPaperDeleted(paper.id);
+      loadModerationPapers();
+      loadAuditLogs();
+      showToast('Paper permanently deleted.');
+    } catch (err: any) {
+      showError(err?.message || 'Could not delete paper.');
+    } finally {
+      setDeletingPaperId(null);
+    }
+  };
+
+  const handleConfirmRestore = async (paper: Paper) => {
+    if (restoringPaperId) return;
+
+    setRestoringPaperId(paper.id);
+    setActionErrorMsg(null);
+    try {
+      const res = await communityPyqService.restoreCommunityPyqByAdmin(paper.id);
+      if (res.error || !res.paper) {
+        showError(res.error?.message || `Could not restore "${paper.title}".`);
+        return;
+      }
+      storageService.savePaper(res.paper);
+      onPaperUpdated(res.paper);
+      setConfirmRestorePaper(null);
+      await Promise.all([loadModerationPapers(), loadAuditLogs()]);
+      showToast(`Restored "${res.paper.title}" to public library.`);
+    } catch (err: any) {
+      showError(err?.message || 'Could not restore paper.');
+    } finally {
+      setRestoringPaperId(null);
     }
   };
 
   const handleResolveReport = async (report: DbReport) => {
     try {
-      await supabaseDb.updateReportStatus(report.id, 'resolved', 'Reviewed by moderator');
+      const res = await supabaseDb.updateReportStatus(report.id, 'resolved', 'Reviewed by moderator');
+      if (!res.success || res.error) {
+        showError('Failed to resolve report: ' + (res.error?.message || 'unknown error'));
+        return;
+      }
       showToast('Report marked as resolved.');
       loadReports();
       loadAuditLogs();
     } catch (err: any) {
       console.error(err);
-      alert('Failed to resolve report: ' + (err.message || 'unknown error'));
+      showError('Failed to resolve report: ' + (err.message || 'unknown error'));
     }
   };
 
   const handleDismissReport = async (report: DbReport) => {
     try {
-      await supabaseDb.updateReportStatus(report.id, 'dismissed', 'Dismissed - content complies');
+      const res = await supabaseDb.updateReportStatus(report.id, 'dismissed', 'Dismissed - content complies');
+      if (!res.success || res.error) {
+        showError('Failed to dismiss report: ' + (res.error?.message || 'unknown error'));
+        return;
+      }
       showToast('Report dismissed.');
       loadReports();
       loadAuditLogs();
     } catch (err: any) {
       console.error(err);
-      alert('Failed to dismiss report: ' + (err.message || 'unknown error'));
+      showError('Failed to dismiss report: ' + (err.message || 'unknown error'));
     }
   };
 
   const handleConfirmTakedown = async () => {
     if (!takedownModalReport) return;
+    const cleanReason = takedownReason.trim() || 'Infringing or disputed material taken down';
     try {
-      await supabaseDb.takedownPaper(
-        takedownModalReport.paper_id,
-        takedownReason || 'Infringing or disputed material taken down'
-      );
-      storageService.deletePaper(takedownModalReport.paper_id);
-      onPaperDeleted(takedownModalReport.paper_id);
-      showToast(`Document taken down and unpublished successfully.`);
+      const res = await supabaseDb.takedownPaper(takedownModalReport.paper_id, cleanReason);
+      if (!res.success || res.error) {
+        showError('Takedown action failed: ' + (res.error?.message || 'unknown error'));
+        return;
+      }
+
+      // Mark originating report as taken_down/resolved best-effort
+      await supabaseDb
+        .updateReportStatus(
+          takedownModalReport.id,
+          'takedown',
+          cleanReason,
+          takedownModalReport.paper_id
+        )
+        .catch(() => {});
+
+      const existingPaper =
+        moderationPapers.find((p) => p.id === takedownModalReport.paper_id) ||
+        papers.find((p) => p.id === takedownModalReport.paper_id);
+      if (existingPaper) {
+        onPaperUpdated({
+          ...existingPaper,
+          status: 'removed',
+          isRemoved: true,
+          removalReason: cleanReason,
+          removedBy: currentUser?.email || 'Studify Administrator',
+          removedAt: new Date().toISOString(),
+        });
+      }
+
+      showToast('Paper unpublished reversibly and moved to Removed / Unpublished Papers.');
       setTakedownModalReport(null);
       setTakedownReason('');
-      loadReports();
-      loadAuditLogs();
+      await Promise.all([loadModerationPapers(), loadReports(), loadAuditLogs()]);
     } catch (err: any) {
       console.error(err);
-      alert('Takedown action failed: ' + (err.message || 'unknown error'));
+      showError('Takedown action failed: ' + (err.message || 'unknown error'));
     }
   };
 
   const handleConfirmSuspend = async () => {
     if (!suspendModalUser) return;
     try {
-      await supabaseDb.suspendUser(
+      const res = await supabaseDb.suspendUser(
         suspendModalUser.userId,
         suspendModalUser.userEmail,
         suspensionReason || 'Violation of content upload policy',
         suspensionDays
       );
+      if (!res.success || res.error) {
+        showError('Suspension failed: ' + (res.error?.message || 'unknown error'));
+        return;
+      }
       showToast(`User suspended for ${suspensionDays > 365 ? '1+ years' : `${suspensionDays} days`}.`);
       setSuspendModalUser(null);
       setSuspensionReason('');
       loadAuditLogs();
     } catch (err: any) {
       console.error(err);
-      alert('Suspension failed: ' + (err.message || 'unknown error'));
+      showError('Suspension failed: ' + (err.message || 'unknown error'));
     }
   };
 
-  const displayedSubmissions = papers.filter((p) => {
+  const activeCatalog = moderationPapers.length > 0 ? moderationPapers : papers;
+  const nonRemovedSubmissions = activeCatalog.filter((p) => p.status !== 'removed' && !p.isRemoved);
+
+  const displayedSubmissions = nonRemovedSubmissions.filter((p) => {
     if (submissionFilter === 'pending') return p.status === 'pending';
     return true;
   });
@@ -213,7 +424,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     return true;
   });
 
-  const pendingSubmissionsCount = papers.filter((p) => p.status === 'pending').length;
+  const pendingSubmissionsCount = nonRemovedSubmissions.filter((p) => p.status === 'pending').length;
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
 
   return (
@@ -259,7 +470,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('submissions')}
+            onClick={() => {
+              setActiveTab('submissions');
+              loadModerationPapers();
+            }}
             className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border ${
               activeTab === 'submissions'
                 ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] font-semibold'
@@ -268,6 +482,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Submissions ({pendingSubmissionsCount})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('removed');
+              loadModerationPapers();
+            }}
+            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border ${
+              activeTab === 'removed'
+                ? 'bg-rose-500/15 text-rose-400 font-semibold'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Removed / Unpublished ({removedPapers.length})</span>
           </button>
           <button
             type="button"
@@ -284,8 +513,33 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             <History className="w-3.5 h-3.5" />
             <span>Audit Trail</span>
           </button>
+
+          {isOwner && (
+            <button
+              type="button"
+              onClick={handleOpenFactoryReset}
+              className="px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 bg-[var(--accent-red-bg)] text-[var(--color-red)] border border-[var(--color-red)]/30 hover:opacity-90 transition-opacity cursor-pointer"
+              title="Owner-only factory reset for test data"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Factory Reset</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {actionErrorMsg && !confirmDeletePaper && !confirmRestorePaper && (
+        <div className="p-3 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs flex items-center justify-between gap-2">
+          <span>{actionErrorMsg}</span>
+          <button
+            type="button"
+            onClick={() => setActionErrorMsg(null)}
+            className="underline cursor-pointer shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* TAB 1: REPORTS & MODERATION */}
       {activeTab === 'reports' && (
@@ -329,7 +583,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           {displayedReports.length > 0 ? (
             <div className="space-y-3">
               {displayedReports.map((report) => {
-                const targetPaper = papers.find((p) => p.id === report.paper_id);
+                const targetPaper =
+                  activeCatalog.find((p) => p.id === report.paper_id) ||
+                  papers.find((p) => p.id === report.paper_id);
                 return (
                   <div
                     key={report.id}
@@ -462,26 +718,37 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       {/* TAB 2: PENDING & ALL SUBMISSIONS */}
       {activeTab === 'submissions' && (
         <div className="space-y-4">
-          <div className="flex gap-1.5 text-xs shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-1.5 text-xs shrink-0">
+              <button
+                onClick={() => setSubmissionFilter('pending')}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer ${
+                  submissionFilter === 'pending'
+                    ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] font-semibold'
+                    : 'bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Pending ({pendingSubmissionsCount})
+              </button>
+              <button
+                onClick={() => setSubmissionFilter('all')}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer ${
+                  submissionFilter === 'all'
+                    ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
+                    : 'bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                All Active & Pending ({nonRemovedSubmissions.length})
+              </button>
+            </div>
             <button
-              onClick={() => setSubmissionFilter('pending')}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer ${
-                submissionFilter === 'pending'
-                  ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] font-semibold'
-                  : 'bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+              type="button"
+              onClick={loadModerationPapers}
+              disabled={isLoadingModeration}
+              className="p-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-divider)] flex items-center gap-1 cursor-pointer"
             >
-              Pending ({pendingSubmissionsCount})
-            </button>
-            <button
-              onClick={() => setSubmissionFilter('all')}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer ${
-                submissionFilter === 'all'
-                  ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
-                  : 'bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              All Submissions ({papers.length})
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingModeration ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
             </button>
           </div>
 
@@ -564,11 +831,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                       </button>
 
                       <button
-                        onClick={() => handleDelete(paper.id)}
-                        className="px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--color-red)] hover:bg-[var(--accent-red-bg)] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        type="button"
+                        onClick={() => {
+                          setActionErrorMsg(null);
+                          setConfirmDeletePaper(paper);
+                        }}
+                        disabled={deletingPaperId === paper.id}
+                        className="px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--color-red)] hover:bg-[var(--accent-red-bg)] rounded-lg transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
+                        <span>{deletingPaperId === paper.id ? 'Deleting...' : 'Delete'}</span>
                       </button>
                     </div>
                   </div>
@@ -578,6 +850,128 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           ) : (
             <div className="py-12 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)] p-6">
               No papers found in this queue.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2B: REMOVED / UNPUBLISHED PAPERS */}
+      {activeTab === 'removed' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                Removed / Unpublished Papers
+              </h2>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Reversibly unpublished submissions stay hidden from students with their storage files, reviews, ratings, and bookmarks preserved. Restore to republish the original record, or delete permanently.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadModerationPapers}
+              disabled={isLoadingModeration}
+              className="p-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-divider)] flex items-center gap-1 cursor-pointer self-start sm:self-center shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingModeration ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
+
+          {removedPapers.length > 0 ? (
+            <div className="space-y-3">
+              {removedPapers.map((paper) => (
+                <div
+                  key={paper.id}
+                  className="bg-[var(--surface-main)] border border-rose-500/30 rounded-xl p-4 sm:p-5 shadow-xs space-y-2.5"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                          Removed / Unpublished
+                        </span>
+                        <span className="font-semibold text-[var(--accent-blue)]">{paper.examBoard}</span>
+                        <span className="text-[var(--text-muted)] opacity-60">·</span>
+                        <span className="text-[var(--text-secondary)]">{paper.grade}</span>
+                        <span className="text-[var(--text-muted)] opacity-60">·</span>
+                        <span className="font-mono text-[var(--text-muted)]">{paper.year}</span>
+                      </div>
+
+                      <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
+                        {paper.title}
+                      </h3>
+
+                      <div className="text-xs text-[var(--text-secondary)] flex flex-wrap gap-3">
+                        <span>
+                          Uploader:{' '}
+                          <strong className="text-[var(--text-primary)]">
+                            {paper.uploaderDisplayName || paper.submittedBy?.name || 'Community'}
+                          </strong>
+                          {paper.submittedBy?.email ? ` (${paper.submittedBy.email})` : ''}
+                        </span>
+                        <span>
+                          Removed Date:{' '}
+                          <strong className="text-[var(--text-primary)] font-mono">
+                            {paper.removedAt ? new Date(paper.removedAt).toLocaleString() : 'Recorded'}
+                          </strong>
+                        </span>
+                        <span>
+                          Administrator:{' '}
+                          <strong className="text-[var(--text-primary)]">
+                            {paper.removedBy || 'Studify Administrator'}
+                          </strong>
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-rose-300 bg-rose-500/10 p-2.5 border border-rose-500/20 rounded-lg">
+                        <strong>Removal Reason:</strong> {paper.removalReason || 'Removed by Administrator'}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap sm:flex-col gap-1.5 shrink-0 self-start">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionErrorMsg(null);
+                          setConfirmRestorePaper(paper);
+                        }}
+                        disabled={restoringPaperId === paper.id}
+                        className="px-3 py-1.5 text-xs font-semibold bg-[var(--accent-blue)] text-white rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>{restoringPaperId === paper.id ? 'Restoring...' : 'Restore Paper'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onSelectPaper(paper)}
+                        className="px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] rounded-lg transition-colors flex items-center gap-1 border border-[var(--border-divider)] cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                        <span>Inspect File</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionErrorMsg(null);
+                          setConfirmDeletePaper(paper);
+                        }}
+                        disabled={deletingPaperId === paper.id}
+                        className="px-2.5 py-1 text-xs text-[var(--color-red)] bg-[var(--accent-red-bg)] hover:opacity-90 rounded-lg transition-opacity flex items-center gap-1 border border-[var(--color-red)]/30 cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{deletingPaperId === paper.id ? 'Deleting...' : 'Delete Permanently'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)] p-6">
+              No removed or unpublished papers at this time.
             </div>
           )}
         </div>
@@ -621,7 +1015,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                         </td>
                         <td className="p-3 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                            log.action.includes('takedown') || log.action.includes('suspend')
+                            log.action.includes('restore')
+                              ? 'bg-[var(--accent-green-bg)] text-[var(--color-green)]'
+                              : log.action.includes('takedown') || log.action.includes('suspend') || log.action.includes('remove') || log.action.includes('delete')
                               ? 'bg-[var(--accent-red-bg)] text-[var(--color-red)]'
                               : 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)]'
                           }`}>
@@ -632,10 +1028,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                           {log.target_type}: {log.target_id}
                         </td>
                         <td className="p-3 text-[11px] text-[var(--text-secondary)]">
-                          {log.moderator_email || log.moderator_id}
+                          {log.moderator_email ||
+                            log.metadata?.moderatorEmail ||
+                            log.metadata?.removedBy ||
+                            log.metadata?.restoredBy ||
+                            log.moderator_id}
                         </td>
                         <td className="p-3 text-xs text-[var(--text-primary)] max-w-md">
-                          {log.reason || JSON.stringify(log.details) || '—'}
+                          {log.reason || (log.metadata ? JSON.stringify(log.metadata) : '—')}
                         </td>
                       </tr>
                     ))}
@@ -665,6 +1065,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 Reject Submission
               </h3>
               <button
+                type="button"
                 onClick={() => setRejectModalPaper(null)}
                 className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-lg cursor-pointer"
                 aria-label="Close"
@@ -687,12 +1088,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
             <div className="flex justify-end gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => setRejectModalPaper(null)}
                 className="px-3 py-1.5 border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmReject}
                 className="px-3.5 py-1.5 bg-[var(--color-red)] text-white font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
               >
@@ -718,6 +1121,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 <span>Confirm Paper Takedown</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setTakedownModalReport(null)}
                 className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-lg cursor-pointer"
                 aria-label="Close"
@@ -745,12 +1149,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
             <div className="flex justify-end gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => setTakedownModalReport(null)}
                 className="px-3 py-1.5 border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmTakedown}
                 className="px-3.5 py-1.5 bg-[var(--color-red)] text-white font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
               >
@@ -776,6 +1182,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 <span>Account Suspension</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setSuspendModalUser(null)}
                 className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-lg cursor-pointer"
                 aria-label="Close"
@@ -819,12 +1226,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
             <div className="flex justify-end gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => setSuspendModalUser(null)}
                 className="px-3 py-1.5 border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmSuspend}
                 className="px-3.5 py-1.5 bg-[var(--color-red)] text-white font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
               >
@@ -833,6 +1242,147 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Owner-Only Factory Data Reset Modal */}
+      {isFactoryResetOpen && isOwner && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="factory-reset-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl max-w-lg w-full p-5 space-y-4 text-xs text-[var(--text-primary)] shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-divider)]">
+              <h3 id="factory-reset-title" className="font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4" />
+                <span>Owner Factory Data Reset</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsFactoryResetOpen(false)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-lg cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-[var(--text-secondary)] leading-relaxed">
+              Permanently deletes all test papers, uploaded PDF/image objects in storage, reviews, bookmarks, workspace projects, notes, and feedback while preserving <strong className="text-[var(--text-primary)]">auth.users</strong>, <strong className="text-[var(--text-primary)]">user_roles</strong>, schemas, RLS policies, and buckets.
+            </p>
+
+            {isLoadingResetPreview ? (
+              <div className="p-4 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-center text-[var(--text-secondary)]">
+                Inspecting live database & storage counts...
+              </div>
+            ) : factoryResetPreview ? (
+              <div className="space-y-2 p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] font-mono text-[11px]">
+                <div className="font-semibold text-[var(--text-primary)]">Dry-Run Preview:</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(factoryResetPreview.storageBuckets || []).map((b: any) => (
+                    <div key={b.bucket} className="flex justify-between">
+                      <span className="text-[var(--text-secondary)]">bucket/{b.bucket}:</span>
+                      <span className="font-semibold">{b.objectCount} files</span>
+                    </div>
+                  ))}
+                  {(factoryResetPreview.databaseTables || [])
+                    .filter((t: any) => t.exists && t.rowCount > 0)
+                    .map((t: any) => (
+                      <div key={t.table} className="flex justify-between">
+                        <span className="text-[var(--text-secondary)]">{t.table}:</span>
+                        <span className="font-semibold">{t.rowCount} rows</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+
+            {factoryResetError && (
+              <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)]">
+                {factoryResetError}
+              </div>
+            )}
+
+            <form onSubmit={handleExecuteFactoryReset} className="space-y-3">
+              <label className="flex items-center gap-2 text-[var(--text-secondary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resetPreserveModeration}
+                  onChange={(e) => setResetPreserveModeration(e.target.checked)}
+                />
+                <span>Preserve moderation logs & reports</span>
+              </label>
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-medium text-[var(--text-secondary)]">
+                  Type <code className="text-[var(--text-primary)] font-bold">RESET STUDIFY TEST DATA</code> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={resetConfirmationInput}
+                  onChange={(e) => setResetConfirmationInput(e.target.value)}
+                  placeholder="RESET STUDIFY TEST DATA"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-red)]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsFactoryResetOpen(false)}
+                  className="px-3 py-1.5 border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isExecutingReset || resetConfirmationInput !== 'RESET STUDIFY TEST DATA'}
+                  className="px-3.5 py-1.5 bg-[var(--color-red)] text-white font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-40 cursor-pointer"
+                >
+                  {isExecutingReset ? 'Resetting...' : 'Execute Factory Reset'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {confirmDeletePaper && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Delete Submission Permanently"
+          description={`Are you sure you want to permanently delete "${confirmDeletePaper.title}" from the database and storage? This action cannot be undone.`}
+          confirmLabel="Delete Permanently"
+          isBusy={Boolean(deletingPaperId)}
+          errorMessage={actionErrorMsg}
+          onConfirm={() => handleDelete(confirmDeletePaper)}
+          onCancel={() => {
+            if (!deletingPaperId) {
+              setConfirmDeletePaper(null);
+              setActionErrorMsg(null);
+            }
+          }}
+        />
+      )}
+
+      {confirmRestorePaper && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Restore Unpublished Paper"
+          description={`Restore "${confirmRestorePaper.title}" to its previous published state? Existing storage files, ratings, reviews, and student bookmarks will be preserved, and the public removal notice will be cleared.`}
+          confirmLabel="Restore Paper"
+          tone="primary"
+          busyLabel="Restoring..."
+          isBusy={Boolean(restoringPaperId)}
+          errorMessage={actionErrorMsg}
+          onConfirm={() => handleConfirmRestore(confirmRestorePaper)}
+          onCancel={() => {
+            if (!restoringPaperId) {
+              setConfirmRestorePaper(null);
+              setActionErrorMsg(null);
+            }
+          }}
+        />
       )}
     </div>
   );

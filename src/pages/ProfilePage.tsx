@@ -24,6 +24,8 @@ import { removalService } from '../services/removalService';
 import { PaperCard } from '../components/PaperCard';
 import { supabase } from '../supabaseClient.js';
 import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { communityPyqService } from '../services/communityPyqService';
 
 interface ProfilePageProps {
   papers: Paper[];
@@ -34,8 +36,10 @@ interface ProfilePageProps {
   onDownloadPaper: (paper: Paper, e?: React.MouseEvent) => void;
   onBookmarkPaper: (paper: Paper, e: React.MouseEvent) => void;
   savedPaperIds: string[];
+  onPaperUpdated?: (updated: Paper) => void;
   onPaperDeleted: (id: string) => void;
   onRedirectToLogin?: () => void;
+  downloadingPaperIds?: Set<string>;
 }
 
 type ProfileSection = 'overview' | 'bookmarks' | 'uploads' | 'removal_requests' | 'reviews' | 'settings';
@@ -49,12 +53,22 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   onDownloadPaper,
   onBookmarkPaper,
   savedPaperIds,
+  onPaperUpdated,
   onPaperDeleted,
   onRedirectToLogin,
+  downloadingPaperIds,
 }) => {
-  const { currentUser, isAuthenticated, logout, openAuthModal } = useAuth();
+  const { currentUser, isAuthenticated, isOwner, logout, openAuthModal } = useAuth();
   const [activeSection, setActiveSection] = useState<ProfileSection>(initialSection);
   const [editingUpload, setEditingUpload] = useState<Paper | null>(null);
+  const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
+  const [confirmDeletePaper, setConfirmDeletePaper] = useState<Paper | null>(null);
+  const [confirmRemovalReq, setConfirmRemovalReq] = useState<{ requestId: string; paperId: string } | null>(null);
+  const [isRemovingViaRequest, setIsRemovingViaRequest] = useState<boolean>(false);
+  const [uploadActionError, setUploadActionError] = useState<string | null>(null);
+  const [totalNotes, setTotalNotes] = useState<number>(0);
+  const [removalRequests, setRemovalRequests] = useState<PaperRemovalRequest[]>([]);
+  const [mySubmissions, setMySubmissions] = useState<Paper[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -70,6 +84,96 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       }
     });
   }, [onRedirectToLogin]);
+
+  const fetchProfileNotesCount = async () => {
+    if (!isAuthenticated || !currentUser?.id) {
+      setTotalNotes(0);
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setTotalNotes(0);
+        return;
+      }
+      const { count, error } = await supabase
+        .from('notes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      if (error) {
+        return;
+      }
+      setTotalNotes(count ?? 0);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser?.id) {
+      setTotalNotes(0);
+      return;
+    }
+    fetchProfileNotesCount();
+
+    const channel = supabase
+      .channel(`profile-notes-count-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => {
+        fetchProfileNotesCount();
+      })
+      .subscribe();
+
+    const handleNotesUpdated = () => {
+      fetchProfileNotesCount();
+    };
+    window.addEventListener('studify:notes-updated', handleNotesUpdated);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('studify:notes-updated', handleNotesUpdated);
+    };
+  }, [isAuthenticated, currentUser?.id]);
+
+  const refreshRemovalRequests = () => {
+    if (currentUser?.id) {
+      removalService.getRequestsForUploader(currentUser.id, currentUser.email).then((data) => {
+        setRemovalRequests(data);
+      });
+    } else {
+      setRemovalRequests([]);
+    }
+  };
+
+  const refreshMySubmissions = async () => {
+    if (!currentUser?.id) {
+      setMySubmissions([]);
+      return;
+    }
+    try {
+      const subs = await communityPyqService.fetchUserCommunitySubmissions(currentUser.id);
+      setMySubmissions(subs);
+    } catch {
+      // Fallback gracefully to papers prop filter below
+    }
+  };
+
+  const papersSyncKey = papers
+    .map(
+      (p) =>
+        `${p.id}:${p.title}:${p.subject}:${p.grade}:${p.examBoard}:${p.year}:${p.chapter || ''}:${p.status}:${p.totalMarks || ''}:${p.timeAllowedMinutes || ''}`
+    )
+    .join('|');
+
+  useEffect(() => {
+    refreshMySubmissions();
+  }, [currentUser?.id, papersSyncKey]);
+
+  useEffect(() => {
+    refreshRemovalRequests();
+    const handleUpdate = () => refreshRemovalRequests();
+    window.addEventListener('studify:removal-requests-updated', handleUpdate);
+    return () => window.removeEventListener('studify:removal-requests-updated', handleUpdate);
+  }, [currentUser?.id, currentUser?.email]);
 
   if (!isAuthenticated || !currentUser) {
     return (
@@ -96,97 +200,98 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     );
   }
 
-  const [totalNotes, setTotalNotes] = useState<number>(0);
-
-  const fetchProfileNotesCount = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setTotalNotes(0);
-        return;
-      }
-      const { count, error } = await supabase
-        .from('notes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-      if (error) {
-        return;
-      }
-      setTotalNotes(count ?? 0);
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    fetchProfileNotesCount();
-
-    const channel = supabase
-      .channel('profile-notes-count')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => {
-        fetchProfileNotesCount();
-      })
-      .subscribe();
-
-    const handleNotesUpdated = () => {
-      fetchProfileNotesCount();
-    };
-    window.addEventListener('studify:notes-updated', handleNotesUpdated);
-
-    return () => {
-      supabase.removeChannel(channel);
-      window.removeEventListener('studify:notes-updated', handleNotesUpdated);
-    };
-  }, []);
-
   const bookmarkedPapers = papers.filter((p) => savedPaperIds.includes(p.id));
-  const userUploads = papers.filter((p) => p.submittedBy.id === currentUser.id);
-
-  // Removal requests state targeted at this uploader
-  const [removalRequests, setRemovalRequests] = useState<PaperRemovalRequest[]>([]);
-
-  const refreshRemovalRequests = () => {
-    if (currentUser?.id) {
-      removalService.getRequestsForUploader(currentUser.id, currentUser.email).then((data) => {
-        setRemovalRequests(data);
-      });
-    }
-  };
-
-  useEffect(() => {
-    refreshRemovalRequests();
-    const handleUpdate = () => refreshRemovalRequests();
-    window.addEventListener('studify:removal-requests-updated', handleUpdate);
-    return () => window.removeEventListener('studify:removal-requests-updated', handleUpdate);
-  }, [currentUser]);
-
+  const userUploads =
+    mySubmissions.length > 0
+      ? mySubmissions
+      : papers.filter((p) => p.submittedBy.id === currentUser.id);
   const pendingRemovalRequests = removalRequests.filter((r) => r.status === 'pending');
 
   const userReviews = papers.flatMap((p) =>
     (p.reviews || [])
-      .filter((r) => r.authorName.toLowerCase() === currentUser.name.toLowerCase() || r.authorName === 'Student Reviewer')
+      .filter((r) =>
+        r.userId
+          ? r.userId === currentUser.id
+          : r.authorName.toLowerCase() === currentUser.name.toLowerCase()
+      )
       .map((r) => ({ review: r, paper: p }))
   );
 
   const totalDownloadsOfUserPapers = userUploads.reduce((acc, p) => acc + (p.downloadsCount || 0), 0);
 
-  const handleDeleteUpload = (id: string) => {
-    if (window.confirm('Delete this submission permanently?')) {
-      storageService.deletePaper(id);
-      onPaperDeleted(id);
+  const handleDeleteUpload = async (paper: Paper) => {
+    if (deletingUploadId) return;
+
+    setDeletingUploadId(paper.id);
+    setUploadActionError(null);
+    try {
+      const res = await communityPyqService.deleteCommunityPyq(paper.id, paper.filePath || paper.fileUrl);
+      if (!res.success || res.error) {
+        const failedDetail =
+          res.failedPaths && res.failedPaths.length > 0
+            ? ` Failed files: ${res.failedPaths.map((f) => f.path).join(', ')}`
+            : '';
+        setUploadActionError((res.error?.message || 'Could not delete paper. Please try again.') + failedDetail);
+        return;
+      }
+
+      setMySubmissions((prev) => prev.filter((p) => p.id !== paper.id));
+      setConfirmDeletePaper(null);
+      onPaperDeleted(paper.id);
+    } catch (err: any) {
+      setUploadActionError(err?.message || 'Could not delete paper. Please try again.');
+    } finally {
+      setDeletingUploadId(null);
     }
   };
 
-  const handleDismissRemovalRequest = (requestId: string) => {
-    removalService.dismissRequest(requestId);
+  const handleDismissRemovalRequest = async (requestId: string) => {
+    const ok = await removalService.dismissRequest(requestId);
+    if (!ok) {
+      setUploadActionError('Could not dismiss removal request. Please try again.');
+      return;
+    }
     refreshRemovalRequests();
   };
 
-  const handleAcceptRemovalRequest = (requestId: string, paperId: string) => {
-    if (window.confirm('Are you sure you want to remove this paper permanently from Studify as requested?')) {
-      removalService.removePaperViaRequest(requestId, paperId);
-      onPaperDeleted(paperId);
-      refreshRemovalRequests();
+  const handleAcceptRemovalRequest = async (requestId: string, paperId: string) => {
+    if (isRemovingViaRequest) return;
+    setIsRemovingViaRequest(true);
+    setUploadActionError(null);
+    try {
+      if (isOwner) {
+        const ok = await removalService.removePaperViaRequest(requestId, paperId);
+        if (!ok) {
+          setUploadActionError('Could not unpublish paper via this request. Please verify permissions.');
+          return;
+        }
+        await removalService.dismissRequest(requestId, 'Unpublished upon review').catch(() => {});
+        setConfirmRemovalReq(null);
+        await refreshMySubmissions();
+        onPaperUpdated?.({
+          ...(userUploads.find((p) => p.id === paperId) || ({ id: paperId } as Paper)),
+          status: 'removed',
+          isRemoved: true,
+        });
+        refreshRemovalRequests();
+      } else {
+        const target = userUploads.find((p) => p.id === paperId);
+        const delRes = await communityPyqService.deleteCommunityPyq(
+          paperId,
+          target?.filePath || target?.fileUrl
+        );
+        if (!delRes.success || delRes.error) {
+          setUploadActionError(delRes.error?.message || 'Could not delete paper via this request.');
+          return;
+        }
+        await removalService.dismissRequest(requestId, 'Removed by uploader upon request').catch(() => {});
+        setMySubmissions((prev) => prev.filter((p) => p.id !== paperId));
+        setConfirmRemovalReq(null);
+        onPaperDeleted(paperId);
+        refreshRemovalRequests();
+      }
+    } finally {
+      setIsRemovingViaRequest(false);
     }
   };
 
@@ -457,6 +562,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                         onDownload={onDownloadPaper}
                         onBookmark={onBookmarkPaper}
                         isBookmarked={true}
+                        isDownloading={Boolean(downloadingPaperIds?.has(paper.id))}
                       />
                     ))}
                   </div>
@@ -506,6 +612,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                       onDownload={onDownloadPaper}
                       onBookmark={onBookmarkPaper}
                       isBookmarked={true}
+                      isDownloading={Boolean(downloadingPaperIds?.has(paper.id))}
                     />
                   ))}
                 </div>
@@ -549,6 +656,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 </button>
               </div>
 
+              {uploadActionError && !confirmDeletePaper && !confirmRemovalReq && (
+                <div className="p-3 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs flex items-center justify-between gap-2">
+                  <span>{uploadActionError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setUploadActionError(null)}
+                    className="underline cursor-pointer shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
               {userUploads.length > 0 ? (
                 <div className="space-y-3">
                   {userUploads.map((paper) => (
@@ -581,7 +701,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                               Waiting for review
                             </span>
                           )}
-                          {paper.status === 'approved' && (
+                          {(paper.status === 'approved' || paper.status === 'active') && (
                             <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--accent-green-bg)] text-[var(--color-green)] flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3" />
                               <span>Approved</span>
@@ -593,8 +713,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                               <span>Not approved</span>
                             </span>
                           )}
+                          {paper.status === 'removed' && (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Removed by Administrator</span>
+                            </span>
+                          )}
 
-                          {paper.status === 'approved' && (
+                          {(paper.status === 'approved' || paper.status === 'active' || paper.status === 'removed') && (
                             <button
                               onClick={() => onSelectPaper(paper)}
                               className="px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
@@ -614,11 +740,17 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                           </button>
 
                           <button
-                            onClick={() => handleDeleteUpload(paper.id)}
-                            className="p-1 text-[var(--text-muted)] hover:text-[var(--color-red)] rounded transition-colors cursor-pointer"
+                            type="button"
+                            onClick={() => {
+                              setUploadActionError(null);
+                              setConfirmDeletePaper(paper);
+                            }}
+                            disabled={deletingUploadId === paper.id}
+                            className="px-2.5 py-1 text-xs font-medium text-[var(--color-red)] bg-[var(--accent-red-bg)] hover:opacity-90 border border-[var(--color-red)]/30 rounded-lg transition-opacity flex items-center gap-1 cursor-pointer disabled:opacity-50 btn-quad-border"
                             title="Delete upload"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
+                            <span>{deletingUploadId === paper.id ? 'Deleting...' : 'Delete'}</span>
                           </button>
                         </div>
                       </div>
@@ -650,7 +782,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                                 Dismiss
                               </button>
                               <button
-                                onClick={() => handleAcceptRemovalRequest(req.id, paper.id)}
+                                type="button"
+                                onClick={() => {
+                                  setUploadActionError(null);
+                                  setConfirmRemovalReq({ requestId: req.id, paperId: paper.id });
+                                }}
                                 className="px-2.5 py-1 text-[11px] font-semibold text-[var(--color-red)] bg-[var(--accent-red-bg)] rounded border border-[var(--color-red)]/30 transition-colors flex items-center gap-1 cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -661,10 +797,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                         </div>
                       ))}
 
-                      {/* Rejection Feedback Note */}
+                      {/* Rejection / Administrator Removal Feedback Note */}
                       {paper.status === 'rejected' && paper.rejectionReason && (
                         <div className="p-2.5 bg-[var(--accent-red-bg)] border border-[var(--color-red)]/20 rounded-lg text-xs text-[var(--color-red)]">
                           <strong>Moderator note:</strong> {paper.rejectionReason}
+                        </div>
+                      )}
+                      {paper.status === 'removed' && (
+                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/25 rounded-lg text-xs text-rose-300">
+                          <strong>Removed by Administrator:</strong> {paper.removalReason || 'Unpublished following moderation review.'}
                         </div>
                       )}
 
@@ -674,7 +815,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                         <span>·</span>
                         <span>{paper.viewsCount || 0} Views</span>
                         <span>·</span>
-                        <span className="text-[var(--color-yellow)]">★ {paper.rating || '5.0'}</span>
+                        <span className="text-[var(--color-yellow)]">
+                          {paper.rating && paper.ratingCount && paper.ratingCount > 0
+                            ? `Rating: ${Number(paper.rating).toFixed(1)} (${paper.ratingCount})`
+                            : 'Not rated'}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -785,7 +930,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                               Dismiss
                             </button>
                             <button
-                              onClick={() => handleAcceptRemovalRequest(req.id, req.paperId)}
+                              type="button"
+                              onClick={() => {
+                                setUploadActionError(null);
+                                setConfirmRemovalReq({ requestId: req.id, paperId: req.paperId });
+                              }}
                               className="px-3 py-1 rounded-lg bg-[var(--accent-red-bg)] hover:opacity-90 text-[var(--color-red)] border border-[var(--color-red)]/30 text-xs font-semibold transition-opacity flex items-center gap-1 cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -921,7 +1070,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <div>
                     <label className="block text-[var(--text-secondary)] mb-1 font-mono uppercase text-[10px]">Joined Date</label>
                     <div className="p-2.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] font-mono">
-                      {new Date(currentUser.joinedDate).toLocaleDateString()}
+                      {(() => {
+                        const accountCreatedAt = currentUser.createdAt ? new Date(currentUser.createdAt) : null;
+                        return accountCreatedAt && Number.isFinite(accountCreatedAt.getTime())
+                          ? new Intl.DateTimeFormat(undefined, {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            }).format(accountCreatedAt)
+                          : 'Not available';
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -957,8 +1115,45 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           onClose={() => setEditingUpload(null)}
           onUpdated={(updated) => {
             setEditingUpload(null);
-            const all = storageService.getPapers();
-            storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
+            setMySubmissions((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+            storageService.savePaper(updated);
+            onPaperUpdated?.(updated);
+          }}
+        />
+      )}
+
+      {confirmDeletePaper && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Delete Submission Permanently"
+          description={`Are you sure you want to permanently delete "${confirmDeletePaper.title}" and its stored files? This cannot be undone.`}
+          confirmLabel="Delete Permanently"
+          isBusy={Boolean(deletingUploadId)}
+          errorMessage={uploadActionError}
+          onConfirm={() => handleDeleteUpload(confirmDeletePaper)}
+          onCancel={() => {
+            if (!deletingUploadId) {
+              setConfirmDeletePaper(null);
+              setUploadActionError(null);
+            }
+          }}
+        />
+      )}
+
+      {confirmRemovalReq && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Remove Paper as Requested"
+          description="Are you sure you want to remove this paper permanently from Studify in response to this removal request?"
+          confirmLabel="Remove Paper"
+          isBusy={isRemovingViaRequest}
+          errorMessage={uploadActionError}
+          onConfirm={() => handleAcceptRemovalRequest(confirmRemovalReq.requestId, confirmRemovalReq.paperId)}
+          onCancel={() => {
+            if (!isRemovingViaRequest) {
+              setConfirmRemovalReq(null);
+              setUploadActionError(null);
+            }
           }}
         />
       )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Bookmark, Star, ArrowUpRight, FolderPlus } from 'lucide-react';
+import { Download, Bookmark, Star, ArrowUpRight, FolderPlus, Camera, Edit2, Trash2 } from 'lucide-react';
 import { Paper } from '../types';
 
 interface PaperCardProps {
@@ -8,7 +8,11 @@ interface PaperCardProps {
   onDownload?: (paper: Paper, e: React.MouseEvent) => void;
   onBookmark?: (paper: Paper, e: React.MouseEvent) => void;
   onAddToProject?: (paper: Paper, e: React.MouseEvent) => void;
+  onEdit?: (paper: Paper, e: React.MouseEvent) => void;
+  onDelete?: (paper: Paper, e: React.MouseEvent) => void;
+  canManage?: boolean;
   isBookmarked?: boolean;
+  isDownloading?: boolean;
 }
 
 export const PaperCard: React.FC<PaperCardProps> = ({
@@ -17,7 +21,11 @@ export const PaperCard: React.FC<PaperCardProps> = ({
   onDownload,
   onBookmark,
   onAddToProject,
+  onEdit,
+  onDelete,
+  canManage = false,
   isBookmarked = false,
+  isDownloading = false,
 }) => {
   return (
     <div
@@ -42,8 +50,9 @@ export const PaperCard: React.FC<PaperCardProps> = ({
               </>
             )}
             {paper.isImageBased ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-green-bg)] text-[var(--color-green)] font-semibold border border-[var(--color-green)]/20">
-                📷 {paper.pageCount || paper.imageUrls?.length || 1} P
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-green-bg)] text-[var(--color-green)] font-medium border border-[var(--color-green)]/20 inline-flex items-center gap-1">
+                <Camera className="w-3 h-3" />
+                <span>{paper.pageCount || paper.imageUrls?.length || 1} P</span>
               </span>
             ) : (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-secondary)] text-[var(--text-muted)] font-mono border border-[var(--border-divider)]">
@@ -55,7 +64,11 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           {onBookmark && (
             <button
               type="button"
-              onClick={(e) => onBookmark(paper, e)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onBookmark(paper, e);
+              }}
               className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 isBookmarked
                   ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30'
@@ -96,7 +109,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
       </div>
 
       {/* Footer Info & Compact Purposeful Actions */}
-      <div className="pt-3.5 mt-3.5 border-t border-[var(--border-divider)] flex items-center justify-between gap-2 relative z-10">
+      <div className="pt-3.5 mt-3.5 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-2 relative z-10">
         {/* Rating & marks */}
         <div className="flex items-center gap-2 text-xs">
           {paper.ratingCount && paper.ratingCount > 0 && paper.rating ? (
@@ -124,10 +137,46 @@ export const PaperCard: React.FC<PaperCardProps> = ({
 
         {/* Compact Action Buttons */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {canManage && onEdit && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit(paper, e);
+              }}
+              className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--accent-blue)] transition-colors cursor-pointer shadow-xs"
+              title="Edit paper metadata"
+              aria-label={`Edit ${paper.title}`}
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {canManage && onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete(paper, e);
+              }}
+              className="p-1.5 rounded-lg bg-[var(--accent-red-bg)] hover:opacity-90 border border-[var(--color-red)]/30 text-[var(--color-red)] transition-opacity cursor-pointer shadow-xs"
+              title="Delete paper permanently"
+              aria-label={`Delete ${paper.title}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {onAddToProject && (
             <button
               type="button"
-              onClick={(e) => onAddToProject(paper, e)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAddToProject(paper, e);
+              }}
               className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--accent-blue)] transition-colors cursor-pointer shadow-xs"
               title="Add to Study Project"
               aria-label="Add to Study Project"
@@ -139,19 +188,34 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           {onDownload && (
             <button
               type="button"
-              onClick={(e) => onDownload(paper, e)}
-              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
-              title={paper.isImageBased ? 'Download Photo' : 'Download PDF'}
+              disabled={isDownloading}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDownload(paper, e);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-60 shadow-xs"
+              title={
+                paper.isImageBased
+                  ? (paper.imagePaths?.length || paper.imageUrls?.length || 1) > 1
+                    ? 'Download Photos (.zip)'
+                    : 'Download Photo'
+                  : 'Download PDF'
+              }
               aria-label="Download paper"
             >
               <Download className="w-3 h-3" />
-              <span className="hidden sm:inline">Download</span>
+              <span className="hidden sm:inline">{isDownloading ? 'Saving...' : 'Download'}</span>
             </button>
           )}
 
           <button
             type="button"
-            onClick={() => onSelect(paper)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect(paper);
+            }}
             className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 shadow-xs cursor-pointer"
           >
             <span>View</span>

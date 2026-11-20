@@ -9,7 +9,8 @@ import {
   FileText, 
   RotateCcw,
   FolderPlus,
-  Bookmark
+  Bookmark,
+  X
 } from 'lucide-react';
 import { Paper } from '../types';
 import { StudyProject, QuickCaptureItem, WorkspaceSession } from '../types/workspace';
@@ -17,6 +18,7 @@ import { workspaceService } from '../services/workspaceService';
 import { useAuth } from '../context/AuthContext';
 import { ProjectWorkspaceView } from '../components/workspace/ProjectWorkspaceView';
 import { QuickCaptureModal } from '../components/workspace/QuickCaptureModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { supabase } from '../supabaseClient.js';
 
 interface WorkspacePageProps {
@@ -43,6 +45,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   // Modals
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
+  const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; title: string } | null>(null);
   const [captureFilter, setCaptureFilter] = useState<string>('all');
   
   // New Project Form
@@ -91,24 +94,48 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   };
 
   useEffect(() => {
-    loadData();
-    fetchNotesCount();
+    let active = true;
 
-    workspaceService.fetchFromSupabase().then((res) => {
-      if (res.projects && res.projects.length > 0) {
-        setProjects(res.projects);
+    const syncWorkspace = async () => {
+      if (!currentUser?.id) {
+        workspaceService.clearLocalWorkspaceCache();
+        if (active) {
+          setProjects([]);
+          setCaptures([]);
+          setTotalNotes(0);
+          setActiveProjectId(null);
+          setPreviousSession(null);
+        }
+        return;
       }
-      if (res.captures && res.captures.length > 0) {
+
+      loadData();
+      const res = await workspaceService.fetchFromSupabase();
+      if (!active) return;
+      if (res.synced) {
+        setProjects(res.projects);
         setCaptures(res.captures);
       }
       fetchNotesCount();
-    });
 
-    const session = workspaceService.getLastSession();
-    if (session && session.activeProjectId) {
-      setPreviousSession(session);
-    }
-  }, []);
+      const session = workspaceService.getLastSession();
+      if (session && session.activeProjectId) {
+        setPreviousSession(session);
+      }
+    };
+
+    syncWorkspace();
+
+    const handleWorkspaceUpdated = () => {
+      if (active) loadData();
+    };
+    window.addEventListener('studify:workspace-updated', handleWorkspaceUpdated);
+
+    return () => {
+      active = false;
+      window.removeEventListener('studify:workspace-updated', handleWorkspaceUpdated);
+    };
+  }, [currentUser?.id]);
 
   const loadData = () => {
     setProjects(workspaceService.getProjects());
@@ -150,15 +177,19 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     workspaceService.recordSessionState({ activeProjectId: id });
   };
 
-  const handleDeleteProject = (id: string, e: React.MouseEvent) => {
+  const handleDeleteProject = (id: string, title: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this study project?')) {
-      workspaceService.deleteProject(id);
-      loadData();
-      if (activeProjectId === id) {
-        setActiveProjectId(null);
-      }
+    setConfirmDeleteProject({ id, title });
+  };
+
+  const confirmProjectDeletion = () => {
+    if (!confirmDeleteProject) return;
+    workspaceService.deleteProject(confirmDeleteProject.id);
+    loadData();
+    if (activeProjectId === confirmDeleteProject.id) {
+      setActiveProjectId(null);
     }
+    setConfirmDeleteProject(null);
   };
 
   const handleToggleResolveCapture = (id: string) => {
@@ -193,9 +224,13 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   }
 
   // Aggregate stats across projects
+  const visiblePaperIds = new Set(papers.map((p) => p.id));
   const totalTasks = projects.reduce((acc, p) => acc + p.tasks.length, 0);
   const completedTasks = projects.reduce((acc, p) => acc + p.tasks.filter((t) => t.completed).length, 0);
-  const totalAttachedPapers = projects.reduce((acc, p) => acc + p.paperIds.length, 0);
+  const totalAttachedPapers = projects.reduce(
+    (acc, p) => acc + p.paperIds.filter((id) => visiblePaperIds.has(id)).length,
+    0
+  );
 
   const filteredCaptures = captures.filter((c) => {
     if (captureFilter === 'all') return true;
@@ -392,7 +427,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                   {/* Footer Info */}
                   <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
                     <div className="flex items-center gap-2 text-[var(--text-muted)]">
-                      <span>{proj.paperIds.length} papers</span>
+                      <span>{proj.paperIds.filter((id) => visiblePaperIds.has(id)).length} papers</span>
                       <span>·</span>
                       <span>{proj.notes.length} notes</span>
                     </div>
@@ -400,7 +435,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={(e) => handleDeleteProject(proj.id, e)}
+                        onClick={(e) => handleDeleteProject(proj.id, proj.title, e)}
                         className="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-red)] rounded-lg transition-colors cursor-pointer btn-quad-border"
                         title="Delete project"
                         aria-label="Delete project"
@@ -554,9 +589,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                   setIsNewProjectModalOpen(false);
                   setShowOptionalDetails(false);
                 }}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer p-1"
+                aria-label="Close modal"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -691,6 +727,17 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
           setCaptures(workspaceService.getQuickCaptures());
         }}
       />
+
+      {confirmDeleteProject && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Delete Study Project"
+          description={`Are you sure you want to delete "${confirmDeleteProject.title}"? This will remove the project and its local milestones.`}
+          confirmLabel="Delete Project"
+          onConfirm={confirmProjectDeletion}
+          onCancel={() => setConfirmDeleteProject(null)}
+        />
+      )}
     </div>
   );
 };

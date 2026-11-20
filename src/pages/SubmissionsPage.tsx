@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Paper } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { storageService } from '../services/storage';
 import { communityPyqService } from '../services/communityPyqService';
 import { FolderClosed, PlusCircle, Trash2, Eye, Edit2 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface SubmissionsPageProps {
   papers: Paper[];
@@ -26,7 +26,10 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
 }) => {
   const { currentUser, isAuthenticated, openAuthModal } = useAuth();
   const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
+  const [confirmDeletePaper, setConfirmDeletePaper] = useState<Paper | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [fetchedSubmissions, setFetchedSubmissions] = useState<Paper[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,6 +45,27 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
       }
     });
   }, [onRedirectToLogin]);
+
+  const papersSyncKey = papers
+    .map(
+      (p) =>
+        `${p.id}:${p.title}:${p.subject}:${p.grade}:${p.examBoard}:${p.year}:${p.chapter || ''}:${p.status}:${p.totalMarks || ''}:${p.timeAllowedMinutes || ''}`
+    )
+    .join('|');
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setFetchedSubmissions([]);
+      return;
+    }
+    let active = true;
+    communityPyqService.fetchUserCommunitySubmissions(currentUser.id).then((rows) => {
+      if (active) setFetchedSubmissions(rows);
+    });
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id, papersSyncKey]);
 
   if (!isAuthenticated || !currentUser) {
     return (
@@ -66,25 +90,32 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
     );
   }
 
-  // Filter papers authored by active user
-  const userSubmissions = papers.filter((p) => p.submittedBy.id === currentUser.id);
+  // Show all submissions authored by active user (active, pending, rejected, removed)
+  const userSubmissions =
+    fetchedSubmissions.length > 0
+      ? fetchedSubmissions
+      : papers.filter((p) => p.submittedBy.id === currentUser.id);
 
   const handleDelete = async (paper: Paper) => {
-    if (!window.confirm(`Delete "${paper.title}"? This will permanently delete the document and purge its file from storage.`)) {
-      return;
-    }
+    if (deletingId) return;
 
     setDeletingId(paper.id);
+    setDeleteError(null);
     try {
       const res = await communityPyqService.deleteCommunityPyq(paper.id, paper.filePath || paper.fileUrl);
       if (res.success) {
-        storageService.deletePaper(paper.id);
+        setFetchedSubmissions((prev) => prev.filter((p) => p.id !== paper.id));
+        setConfirmDeletePaper(null);
         onPaperDeleted(paper.id);
       } else {
-        alert(res.error?.message || 'Could not delete paper.');
+        const failedDetail =
+          res.failedPaths && res.failedPaths.length > 0
+            ? ` Failed files: ${res.failedPaths.map((f) => f.path).join(', ')}`
+            : '';
+        setDeleteError((res.error?.message || 'Could not delete paper.') + failedDetail);
       }
-    } catch {
-      alert('Could not delete paper.');
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Could not delete paper.');
     } finally {
       setDeletingId(null);
     }
@@ -113,6 +144,19 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
         </button>
       </div>
 
+      {deleteError && !confirmDeletePaper && (
+        <div className="p-3 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs flex items-center justify-between gap-2">
+          <span>{deleteError}</span>
+          <button
+            type="button"
+            onClick={() => setDeleteError(null)}
+            className="text-xs underline cursor-pointer shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Submissions List */}
       {userSubmissions.length > 0 ? (
         <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl overflow-hidden shadow-xs">
@@ -131,10 +175,22 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                     <span className="text-[var(--accent-blue)]">{paper.subject}</span>
                     <span>·</span>
                     <span className="font-mono tabular-nums">{paper.year}</span>
-                    {paper.status === 'takedown' && (
+                    {(paper.status === 'takedown' || paper.status === 'removed') && (
                       <>
                         <span>·</span>
-                        <span className="text-[var(--color-red)] font-semibold">Takedown</span>
+                        <span className="text-[var(--color-red)] font-semibold">Removed by Administrator</span>
+                      </>
+                    )}
+                    {paper.status === 'pending' && (
+                      <>
+                        <span>·</span>
+                        <span className="text-[var(--color-yellow)] font-semibold">Pending Review</span>
+                      </>
+                    )}
+                    {paper.status === 'rejected' && (
+                      <>
+                        <span>·</span>
+                        <span className="text-[var(--color-red)] font-semibold">Rejected</span>
                       </>
                     )}
                   </div>
@@ -146,12 +202,22 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                     {paper.title}
                   </h3>
 
+                  {paper.status === 'removed' && paper.removalReason && (
+                    <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2.5 py-1.5">
+                      <strong>Administrator reason:</strong> {paper.removalReason}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center text-xs text-[var(--text-secondary)] gap-3 font-mono tabular-nums">
                     <span>{paper.viewsCount} Views</span>
                     <span>·</span>
                     <span>{paper.downloadsCount} Downloads</span>
                     <span>·</span>
-                    <span>Rating: {paper.rating ? paper.rating.toFixed(1) : '0.0'} ({paper.ratingCount || 0})</span>
+                    <span>
+                      {paper.rating && paper.ratingCount && paper.ratingCount > 0
+                        ? `Rating: ${Number(paper.rating).toFixed(1)} (${paper.ratingCount})`
+                        : 'Not rated'}
+                    </span>
                   </div>
                 </div>
 
@@ -177,13 +243,17 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => handleDelete(paper)}
+                    onClick={() => {
+                      setDeleteError(null);
+                      setConfirmDeletePaper(paper);
+                    }}
                     disabled={deletingId === paper.id}
-                    className="p-1.5 rounded-lg border border-[var(--color-red)]/30 hover:bg-[var(--accent-red-bg)] text-[var(--color-red)] transition-colors disabled:opacity-50 cursor-pointer btn-quad-border"
+                    className="px-2.5 py-1.5 rounded-lg border border-[var(--color-red)]/30 bg-[var(--accent-red-bg)] hover:opacity-90 text-[var(--color-red)] text-xs font-semibold transition-opacity flex items-center gap-1 disabled:opacity-50 cursor-pointer btn-quad-border"
                     title="Delete Paper"
                     aria-label="Delete Paper"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deletingId === paper.id ? 'Deleting...' : 'Delete'}</span>
                   </button>
                 </div>
               </div>
@@ -219,8 +289,27 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
           paper={editingPaper}
           onClose={() => setEditingPaper(null)}
           onUpdated={(updated) => {
+            setFetchedSubmissions((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
             if (onPaperUpdated) onPaperUpdated(updated);
             setEditingPaper(null);
+          }}
+        />
+      )}
+
+      {confirmDeletePaper && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Delete Paper Permanently"
+          description={`Delete "${confirmDeletePaper.title}"? This will permanently delete the document record and purge its file from storage.`}
+          confirmLabel="Delete Permanently"
+          isBusy={Boolean(deletingId)}
+          errorMessage={deleteError}
+          onConfirm={() => handleDelete(confirmDeletePaper)}
+          onCancel={() => {
+            if (!deletingId) {
+              setConfirmDeletePaper(null);
+              setDeleteError(null);
+            }
           }}
         />
       )}

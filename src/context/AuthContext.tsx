@@ -1,11 +1,16 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User } from '../types';
 import { supabase, signInWithGoogle } from '../supabaseClient.js';
+import { clearStudifyContentCaches } from '../services/localCacheReset';
+import { storageService } from '../services/storage';
+import { workspaceService } from '../services/workspaceService';
+import { removalService } from '../services/removalService';
 
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
   isOwner: boolean;
+  authReady: boolean;
   logout: () => Promise<void>;
   signInWithGoogle: (options?: any) => Promise<{ data: any; error: any }>;
   isAuthModalOpen: boolean;
@@ -18,6 +23,26 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'pyq_auth_user_v1';
+
+/**
+ * Purges in-memory and local user/content caches whenever the active account
+ * changes (User A -> User B or User A -> signed out) so data never leaks across accounts.
+ */
+export function syncAccountCacheIsolation(prevUserId: string | null, nextUserId: string | null): boolean {
+  if (prevUserId === nextUserId) {
+    return false;
+  }
+
+  storageService.clearInMemoryState();
+  workspaceService.clearLocalWorkspaceCache();
+  removalService.clearLocalReports();
+
+  if (prevUserId !== null) {
+    clearStudifyContentCaches();
+  }
+
+  return true;
+}
 
 // Helper to map a real Supabase user object into the Studify User type
 // Priority 2: Never allow users to self-assign owner role via user_metadata.
@@ -42,17 +67,18 @@ const mapSupabaseUser = (supabaseUser: any, isVerifiedAdmin: boolean = false): U
     avatarInitials = `${parts[0][0]}S`.toUpperCase();
   }
 
-  // Format creation timestamp
-  const createdDate = supabaseUser?.created_at
-    ? new Date(supabaseUser.created_at)
-    : new Date();
-  const joinedDate = createdDate.toLocaleDateString('en-US', {
-    month: 'short',
-    year: 'numeric',
-  });
+  // Preserve original Supabase account creation timestamp
+  const createdAt = typeof supabaseUser?.created_at === 'string' ? supabaseUser.created_at : null;
+  const joinedDate = createdAt
+    ? new Date(createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : undefined;
 
   // Verify admin status from secure sources only (app_metadata or database verification)
-  const ownerEmail = (import.meta.env.VITE_OWNER_EMAIL || 'teamstudify5@gmail.com').toLowerCase().trim();
+  const metaEnv =
+    typeof import.meta !== 'undefined' && (import.meta as any).env
+      ? (import.meta as any).env
+      : {};
+  const ownerEmail = (metaEnv.VITE_OWNER_EMAIL || 'teamstudify5@gmail.com').toLowerCase().trim();
   const hasAppMetaAdmin = appMetadata.role === 'owner' || appMetadata.role === 'admin' || appMetadata.is_admin === true;
   const isOwner = hasAppMetaAdmin || isVerifiedAdmin || (email && email.toLowerCase().trim() === ownerEmail);
 
@@ -64,42 +90,67 @@ const mapSupabaseUser = (supabaseUser: any, isVerifiedAdmin: boolean = false): U
     avatarInitials,
     institution: metadata.institution || 'Studify Scholar',
     joinedDate,
+    createdAt,
   };
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+  const activeUserIdRef = useRef<string | null>(null);
+  const authSeqRef = useRef<number>(0);
 
   // 1. Purge legacy test account key on mount & synchronize with Supabase Auth
   useEffect(() => {
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-
-    // Check existing Supabase session on application start
-    let isMounted = true;
-
-    const syncUserWithDbRole = async (user: any) => {
-      let isDbAdmin = false;
+    if (typeof localStorage !== 'undefined') {
       try {
-        const { data: roleRow } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        if (roleRow && (roleRow.role === 'owner' || roleRow.role === 'admin')) {
-          isDbAdmin = true;
-        }
+        localStorage.removeItem(AUTH_STORAGE_KEY);
       } catch {
         // ignore
       }
-      if (isMounted) {
-        setCurrentUser(mapSupabaseUser(user, isDbAdmin));
+    }
+
+    let isMounted = true;
+
+    const applySessionTransition = async (supabaseUser: any | null) => {
+      const seq = ++authSeqRef.current;
+      const nextUserId: string | null = supabaseUser?.id || null;
+
+      syncAccountCacheIsolation(activeUserIdRef.current, nextUserId);
+      activeUserIdRef.current = nextUserId;
+
+      if (!supabaseUser) {
+        if (isMounted) {
+          setCurrentUser(null);
+          setAuthReady(true);
+        }
+        return;
       }
+
+      let isDbAdmin = false;
+      try {
+        const { data: roleRow, error: roleError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', supabaseUser.id)
+          .maybeSingle();
+        if (roleError) {
+          console.warn('user_roles lookup notice:', roleError.message);
+        } else if (roleRow && (roleRow.role === 'owner' || roleRow.role === 'admin')) {
+          isDbAdmin = true;
+        }
+      } catch (err) {
+        console.warn('user_roles lookup exception:', err);
+      }
+
+      if (!isMounted || seq !== authSeqRef.current) {
+        return;
+      }
+
+      setCurrentUser(mapSupabaseUser(supabaseUser, isDbAdmin));
+      setAuthReady(true);
     };
 
     supabase.auth
@@ -107,14 +158,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(({ data: { session }, error }) => {
         if (error) {
           console.error('Error fetching Supabase session:', error.message);
+          if (isMounted) {
+            setAuthReady(true);
+          }
           return;
         }
-        if (isMounted && session?.user) {
-          syncUserWithDbRole(session.user);
+        if (isMounted) {
+          void applySessionTransition(session?.user || null);
         }
       })
       .catch((err) => {
         console.error('Unexpected error checking session:', err);
+        if (isMounted) {
+          setAuthReady(true);
+        }
       });
 
     // 2. Subscribe to Supabase auth state changes
@@ -122,11 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
-      if (session?.user) {
-        syncUserWithDbRole(session.user);
-      } else {
-        setCurrentUser(null);
-      }
+      void applySessionTransition(session?.user || null);
     });
 
     return () => {
@@ -135,18 +188,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Sign out cleanly through Supabase
+  // Sign out cleanly through Supabase and purge user/content caches
   const logout = async () => {
+    authSeqRef.current += 1;
+    const hadUser = activeUserIdRef.current !== null;
+    activeUserIdRef.current = null;
+
     try {
       await supabase.auth.signOut();
     } catch (err) {
       console.error('Error during Supabase signOut:', err);
     } finally {
       setCurrentUser(null);
-      try {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      } catch {
-        // ignore
+      setAuthReady(true);
+      storageService.clearInMemoryState();
+      workspaceService.clearLocalWorkspaceCache();
+      removalService.clearLocalReports();
+      clearStudifyContentCaches();
+      if (hadUser && typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(new CustomEvent('studify:caches-cleared'));
+        } catch {
+          // ignore
+        }
+      }
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
       }
     }
   };
@@ -169,6 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         isAuthenticated,
         isOwner,
+        authReady,
         logout,
         signInWithGoogle,
         isAuthModalOpen,

@@ -3,7 +3,6 @@ import { X, AlertTriangle, Send, CheckCircle2, ShieldAlert, FileText, User } fro
 import { Paper } from '../types';
 import { RemovalReasonCategory } from '../types/removal';
 import { removalService } from '../services/removalService';
-import { supabaseDb } from '../services/supabaseDb';
 import { useAuth } from '../context/AuthContext';
 
 interface ReportRemovalModalProps {
@@ -137,26 +136,16 @@ export const ReportRemovalModal: React.FC<ReportRemovalModalProps> = ({
     setErrorMessage(null);
 
     try {
-      // 1. Submit report to Supabase DB
-      await supabaseDb.submitReport({
-        paperId: paper.id,
+      const result = await removalService.createRequest({
+        paper,
+        reporterName: reporterName.trim() || 'Student Contributor',
+        reporterEmail: reporterEmail.trim(),
         reasonCategory: category,
         reasonDetails: details.trim(),
-        reporterEmail: reporterEmail.trim(),
-        reporterName: reporterName.trim() || 'Student Contributor',
       });
 
-      // 2. Also register in local removalService for notifications
-      try {
-        await removalService.createRequest({
-          paper,
-          reporterName: reporterName.trim() || 'Student Contributor',
-          reporterEmail: reporterEmail.trim(),
-          reasonCategory: category,
-          reasonDetails: details.trim(),
-        });
-      } catch (localErr) {
-        console.warn('Local removal service synced via DB', localErr);
+      if (!result.success) {
+        throw new Error(result.error || 'Could not deliver report. Please try again.');
       }
 
       setIsSuccess(true);
@@ -165,7 +154,7 @@ export const ReportRemovalModal: React.FC<ReportRemovalModalProps> = ({
       }
     } catch (err: any) {
       console.error('Failed to submit report', err);
-      if (err?.message?.includes('already been submitted')) {
+      if (err?.message?.includes('pending report')) {
         setErrorMessage('A report for this document is already under review by moderators.');
       } else {
         setErrorMessage(err?.message || 'Could not deliver report. Please check your connection and try again.');

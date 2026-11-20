@@ -36,6 +36,7 @@ export interface PaperReview {
   text?: string;
   authorName: string;
   createdAt: string;
+  userId?: string;
 }
 
 export interface PaperComment {
@@ -44,6 +45,18 @@ export interface PaperComment {
   authorEmail?: string;
   text: string;
   createdAt: string;
+}
+
+export interface PaperRemovalNotice {
+  id: string;
+  title: string;
+  subject: string;
+  examBoard: string;
+  grade: string;
+  year: number;
+  removalReason: string;
+  removedAt: string;
+  removedBy: string;
 }
 
 export interface Paper {
@@ -59,6 +72,8 @@ export interface Paper {
   timeAllowedMinutes?: number;
   description: string;
   status: PaperStatus;
+  previousStatus?: string;
+  isRemoved?: boolean;
   rejectionReason?: string;
   removalReason?: string;
   removedBy?: string;
@@ -78,6 +93,7 @@ export interface Paper {
   filePath?: string;
   isImageBased?: boolean;
   imageUrls?: string[];
+  imagePaths?: string[];
   pageCount?: number;
   uploaderDisplayName?: string;
   sections: PaperSection[];
@@ -91,6 +107,34 @@ export interface Paper {
   moderationNotes?: string;
 }
 
+export type DeletePaperErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'STORAGE_PERMISSION_ERROR'
+  | 'STORAGE_NETWORK_ERROR'
+  | 'STORAGE_PARTIAL_DELETE'
+  | 'STORAGE_ERROR'
+  | 'DB_DELETE_FAILED_AFTER_STORAGE_DELETE'
+  | 'DB_ERROR';
+
+export type DeletePaperOutcomeCode =
+  | 'DELETED'
+  | 'DELETED_WITH_MISSING_STORAGE'
+  | DeletePaperErrorCode;
+
+export interface DeleteCommunityPyqResult {
+  success: boolean;
+  code: DeletePaperOutcomeCode;
+  error: Error | null;
+  storageDeleted: boolean;
+  dbDeleted: boolean;
+  deletedPaths: string[];
+  missingPaths: string[];
+  failedPaths?: { path: string; reason: string }[];
+  storagePartiallyDeleted?: boolean;
+}
+
 export type UserRole = 'student' | 'owner';
 
 export interface User {
@@ -100,7 +144,8 @@ export interface User {
   role: UserRole;
   avatarInitials: string;
   institution?: string;
-  joinedDate: string;
+  joinedDate?: string;
+  createdAt: string | null;
 }
 
 export interface AppAdmin {

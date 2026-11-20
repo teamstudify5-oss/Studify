@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Navbar } from './components/Navbar';
@@ -11,6 +11,7 @@ import { PaperDetailsPage } from './pages/PaperDetailsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { UploadPage } from './pages/UploadPage';
 import { AdminPage } from './pages/AdminPage';
+import { SubmissionsPage } from './pages/SubmissionsPage';
 import { AuthPage } from './pages/AuthPage';
 import { Paper, FilterState } from './types';
 import { storageService } from './services/storage';
@@ -20,19 +21,27 @@ import { WorkspacePage } from './pages/WorkspacePage';
 import { CommandCenter } from './components/workspace/CommandCenter';
 import { QuickCaptureModal } from './components/workspace/QuickCaptureModal';
 import { workspaceService } from './services/workspaceService';
-import { supabaseStorage } from './services/supabaseStorage';
+import { downloadPaperAsset } from './services/paperDownloadService';
 import { DownloadLimitModal } from './components/DownloadLimitModal';
 import { downloadQuotaService, DownloadQuota } from './services/downloadQuotaService';
 
 function MainApp() {
-  const { isAuthenticated, openAuthModal } = useAuth();
+  const { isAuthenticated, currentUser, authReady, openAuthModal } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>('home');
+  const currentTabRef = useRef<string>('home');
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [browseFilters, setBrowseFilters] = useState<Partial<FilterState> & { search?: string }>({});
   const [papers, setPapers] = useState<Paper[]>([]);
   const [savedPaperIds, setSavedPaperIds] = useState<string[]>([]);
   const [isLoginRequiredOpen, setIsLoginRequiredOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVariant, setToastVariant] = useState<'info' | 'error'>('info');
+  const activeDownloadsRef = useRef<Set<string>>(new Set());
+  const [downloadingPaperIds, setDownloadingPaperIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    currentTabRef.current = currentTab;
+  }, [currentTab]);
 
   // Student Workspace & Command Center State
   const [isCommandCenterOpen, setIsCommandCenterOpen] = useState<boolean>(false);
@@ -48,31 +57,83 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
-          downloadQuotaService.mergeAnonymousQuotaIntoUser(user.id).then(setDownloadQuota);
-        }
-      });
+    if (isAuthenticated && currentUser?.id) {
+      downloadQuotaService.mergeAnonymousQuotaIntoUser(currentUser.id).then(setDownloadQuota);
+    } else {
+      downloadQuotaService.getQuota().then(setDownloadQuota);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser?.id]);
+
+  // Authoritatively hydrate PYQ library, bookmarks, and workspace references
+  // once auth session hydration is ready AND whenever authentication state or user changes.
+  useEffect(() => {
+    if (!authReady) return;
+    let active = true;
+
+    const syncLibraryAndBookmarks = async () => {
+      if (!isAuthenticated || !currentUser?.id) {
+        workspaceService.clearLocalWorkspaceCache();
+      }
+
+      const [papersRes, savedRes] = await Promise.all([
+        storageService.fetchPapersFromSupabaseWithStatus(),
+        storageService.fetchSavedPaperIdsFromSupabaseWithStatus(),
+      ]);
+
+      if (!active) return;
+
+      if (papersRes.synced) {
+        setPapers(papersRes.papers);
+
+        const validIds = new Set(papersRes.papers.map((p) => p.id));
+
+        // Refresh selectedPaper from authoritative feed, but keep it intact when viewing
+        // paper-details so PaperDetailsPage can render the official removal notice if unpublished.
+        setSelectedPaper((prev) => {
+          if (!prev) return null;
+          if (!validIds.has(prev.id)) {
+            return currentTabRef.current === 'paper-details' ? prev : null;
+          }
+          return papersRes.papers.find((p) => p.id === prev.id) || prev;
+        });
+
+        // Sync bookmarks and workspace projects without deleting references to
+        // papers that may simply be pending, rejected, or unpublished.
+        setSavedPaperIds(savedRes.synced ? savedRes.ids : []);
+
+        if (isAuthenticated && currentUser?.id) {
+          const wsRes = await workspaceService.fetchFromSupabase();
+          if (active && wsRes.synced) {
+            window.dispatchEvent(new CustomEvent('studify:workspace-updated'));
+          }
+        }
+      } else {
+        // Never silently display stale local papers when Supabase sync fails
+        setPapers([]);
+        setSavedPaperIds(savedRes.synced ? savedRes.ids : []);
+        if (papersRes.error) {
+          console.error('Failed to load Community PYQs from Supabase:', papersRes.error.message);
+          showToast(papersRes.error.message || 'Could not load Community PYQs from Supabase.', 'error');
+        }
+      }
+    };
+
+    syncLibraryAndBookmarks();
+
+    return () => {
+      active = false;
+    };
+  }, [authReady, isAuthenticated, currentUser?.id]);
 
   useEffect(() => {
-    const loaded = storageService.getPapers();
-    setPapers(loaded);
-    setSavedPaperIds(storageService.getSavedPaperIds());
-
-    // Hydrate saved bookmarks from Supabase for authenticated user
-    storageService.fetchSavedPaperIdsFromSupabase().then((ids) => {
-      if (ids && ids.length > 0) setSavedPaperIds(ids);
-    });
-
-    // Hydrate papers from Supabase if published in database
-    storageService.fetchPapersFromSupabase().then((remotePapers) => {
-      if (remotePapers && remotePapers.length > 0) {
-        setPapers(remotePapers);
-      }
-    });
+    const handleCachesCleared = () => {
+      storageService.clearInMemoryState();
+      setPapers([]);
+      setSavedPaperIds([]);
+      setSelectedPaper(null);
+      downloadQuotaService.getQuota().then(setDownloadQuota);
+    };
+    window.addEventListener('studify:caches-cleared', handleCachesCleared);
 
     // Keyboard shortcut for Command Center (Cmd+K / Ctrl+K)
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -129,7 +190,11 @@ function MainApp() {
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('studify:caches-cleared', handleCachesCleared);
+    };
   }, []);
 
   useEffect(() => {
@@ -138,9 +203,10 @@ function MainApp() {
     }
   }, [isAuthenticated, currentTab]);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, variant: 'info' | 'error' = 'info') => {
+    setToastVariant(variant);
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2500);
+    setTimeout(() => setToastMessage(null), variant === 'error' ? 4000 : 2500);
   };
 
   const handleSelectPaper = (paper: Paper) => {
@@ -174,7 +240,11 @@ function MainApp() {
   const handleDownloadPaper = async (paper: Paper, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
-    // Feature 2: Enforce download quota (10 free downloads limit)
+    if (activeDownloadsRef.current.has(paper.id)) {
+      return;
+    }
+
+    // Enforce download quota before starting download
     const quotaCheck = await downloadQuotaService.canDownload();
     setDownloadQuota(quotaCheck.quota);
 
@@ -183,115 +253,93 @@ function MainApp() {
       return;
     }
 
-    storageService.recordDownload(paper.id);
-    setPapers(storageService.getPapers());
+    activeDownloadsRef.current.add(paper.id);
+    setDownloadingPaperIds(new Set(activeDownloadsRef.current));
+    try {
+      const result = await downloadPaperAsset(paper);
 
-    // Record completed download against server-side quota
-    const recordResult = await downloadQuotaService.recordSuccessfulDownload(paper.id, paper.title);
-    setDownloadQuota(recordResult.quota);
+      // Record download & quota ONLY after asset download actually succeeds
+      storageService.recordDownload(paper.id);
+      setPapers(storageService.getPapers());
 
-    const remainingNotice =
-      recordResult.quota.remainingDownloads > 0
-        ? `(${recordResult.quota.remainingDownloads} free downloads left)`
-        : '(10/10 downloads used)';
+      const recordResult = await downloadQuotaService.recordSuccessfulDownload(paper.id, paper.title);
+      setDownloadQuota(recordResult.quota);
 
-    // If paper has a public or storage fileUrl, download it directly
-    if (paper.fileUrl) {
-      try {
-        // Direct public community-pyqs URL
-        if (paper.fileUrl.startsWith('http://') || paper.fileUrl.startsWith('https://')) {
-          const a = document.createElement('a');
-          a.href = paper.fileUrl;
-          a.download = paper.fileName || `${paper.subject}_${paper.year}.pdf`;
-          a.target = '_blank';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          showToast(`Download started ${remainingNotice}`);
-          return;
-        }
+      const remainingNotice =
+        recordResult.quota.remainingDownloads > 0
+          ? `(${recordResult.quota.remainingDownloads} free downloads left)`
+          : '(10/10 downloads used)';
 
-        // Private storage path fallback (e.g. app-files bucket)
-        const signedUrl = await supabaseStorage.getSignedFileUrl(paper.fileUrl);
-        if (signedUrl) {
-          const a = document.createElement('a');
-          a.href = signedUrl;
-          a.download = paper.fileName || `${paper.subject}_${paper.year}.pdf`;
-          a.target = '_blank';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          showToast(`Download started ${remainingNotice}`);
-          return;
-        }
-      } catch (err) {
-        console.warn('Storage file download error, proceeding with document export', err);
-      }
+      const prefix =
+        result.kind === 'zip'
+          ? 'Downloaded ZIP bundle'
+          : 'Download started';
+
+      showToast(`${prefix} ${remainingNotice}`);
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : 'Could not download this paper. Please try again.';
+      showToast(message, 'error');
+    } finally {
+      activeDownloadsRef.current.delete(paper.id);
+      setDownloadingPaperIds(new Set(activeDownloadsRef.current));
     }
-
-    const questionsText = (paper.sections || [])
-      .map(
-        (sec) =>
-          `\n--- ${sec.name}: ${sec.title} (${sec.totalMarks} Marks) ---\n` +
-          (sec.instructions ? `Instructions: ${sec.instructions}\n\n` : '\n') +
-          sec.questions
-            .map(
-              (q) =>
-                `Q.${q.number} [${q.marks} Marks]\n${q.text}\n` +
-                (q.formula ? `Formula: ${q.formula}\n` : '') +
-                (q.choices
-                  ? q.choices.map((c) => `  (${c.key}) ${c.text}`).join('\n') + '\n'
-                  : '')
-            )
-            .join('\n')
-      )
-      .join('\n');
-
-    const marksLine = paper.totalMarks && paper.totalMarks > 0 ? `Total Marks: ${paper.totalMarks}\n` : '';
-    const timeLine = paper.timeAllowedMinutes && paper.timeAllowedMinutes > 0 ? `Time: ${paper.timeAllowedMinutes / 60} Hours\n` : '';
-
-    const fileContent =
-      `${paper.examBoard.toUpperCase()} — ${paper.grade}\n` +
-      `Subject: ${paper.subject} (${paper.year})\n` +
-      `Title: ${paper.title}\n` +
-      marksLine +
-      timeLine +
-      `\n============================================================\n` +
-      questionsText +
-      `\n\n============================================================\n` +
-      `Downloaded from Studify (100% Free Study Repository)\n`;
-
-    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = (paper.fileName || `${paper.subject}_${paper.year}`).replace(/\.pdf$/i, '') + '.txt';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    showToast(`Download started ${remainingNotice}`);
   };
 
-  const handlePaperSubmitted = (newPaper: Paper) => {
+  const handlePaperSubmitted = (_newPaper: Paper) => {
     setPapers(storageService.getPapers());
+    storageService.fetchPapersFromSupabaseWithStatus().then((res) => {
+      if (res.synced) {
+        setPapers(res.papers);
+      }
+    });
   };
 
   const handlePaperUpdated = (updated: Paper) => {
+    if (updated.status === 'removed' || updated.isRemoved) {
+      storageService.removePaperFromLocalCache(updated.id);
+      setPapers(storageService.getPapers().filter((p) => p.id !== updated.id));
+      if (selectedPaper?.id === updated.id) {
+        setSelectedPaper(updated);
+      }
+      showToast('Paper unpublished reversibly');
+      return;
+    }
+
+    storageService.savePaper(updated);
     setPapers(storageService.getPapers());
     if (selectedPaper?.id === updated.id) {
       setSelectedPaper(updated);
     }
-    showToast(updated.status === 'approved' ? 'Paper approved' : 'Paper updated');
+    storageService.fetchPapersFromSupabaseWithStatus().then((res) => {
+      if (res.synced) {
+        setPapers(res.papers);
+      }
+    });
+    showToast(updated.status === 'approved' || updated.status === 'active' ? 'Paper published to library' : 'Paper updated');
   };
 
   const handlePaperDeleted = (id: string) => {
+    storageService.removePaperFromLocalCache(id);
+    workspaceService.removePaperReferenceEverywhere(id);
     setPapers(storageService.getPapers());
+    setSavedPaperIds(storageService.getSavedPaperIds());
     if (selectedPaper?.id === id) {
       setSelectedPaper(null);
-      setCurrentTab('browse');
+      if (currentTab === 'paper-details') {
+        setCurrentTab('browse');
+      }
     }
+    Promise.all([
+      storageService.fetchPapersFromSupabaseWithStatus(),
+      storageService.fetchSavedPaperIdsFromSupabaseWithStatus(),
+    ]).then(([papersRes, savedRes]) => {
+      if (papersRes.synced) {
+        setPapers(papersRes.papers);
+      }
+      if (savedRes.synced) {
+        setSavedPaperIds(savedRes.ids);
+      }
+    });
     showToast('Paper deleted');
   };
 
@@ -364,7 +412,10 @@ function MainApp() {
             onSelectPaper={handleSelectPaper}
             onDownloadPaper={handleDownloadPaper}
             onBookmarkPaper={handleBookmarkPaper}
+            onPaperUpdated={handlePaperUpdated}
+            onPaperDeleted={handlePaperDeleted}
             savedPaperIds={savedPaperIds}
+            downloadingPaperIds={downloadingPaperIds}
           />
         )}
 
@@ -378,6 +429,9 @@ function MainApp() {
             onBookmarkPaper={handleBookmarkPaper}
             isBookmarked={savedPaperIds.includes(selectedPaper.id)}
             onRequireLogin={() => setIsLoginRequiredOpen(true)}
+            onPaperUpdated={handlePaperUpdated}
+            onPaperDeleted={handlePaperDeleted}
+            downloadingPaperIds={downloadingPaperIds}
           />
         )}
 
@@ -398,8 +452,10 @@ function MainApp() {
               onDownloadPaper={handleDownloadPaper}
               onBookmarkPaper={handleBookmarkPaper}
               savedPaperIds={savedPaperIds}
+              onPaperUpdated={handlePaperUpdated}
               onPaperDeleted={handlePaperDeleted}
               onRedirectToLogin={() => setCurrentTab('login')}
+              downloadingPaperIds={downloadingPaperIds}
             />
           </ProtectedRoute>
         )}
@@ -428,6 +484,22 @@ function MainApp() {
               onPaperUpdated={handlePaperUpdated}
               onPaperDeleted={handlePaperDeleted}
               onSelectPaper={handleSelectPaper}
+              onRedirectToLogin={() => setCurrentTab('login')}
+            />
+          </ProtectedRoute>
+        )}
+
+        {currentTab === 'submissions' && (
+          <ProtectedRoute onRedirectToLogin={() => setCurrentTab('login')}>
+            <SubmissionsPage
+              papers={papers}
+              onSelectPaper={handleSelectPaper}
+              onNavigateToUpload={() => {
+                setCurrentTab('upload');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onPaperDeleted={handlePaperDeleted}
+              onPaperUpdated={handlePaperUpdated}
               onRedirectToLogin={() => setCurrentTab('login')}
             />
           </ProtectedRoute>
@@ -546,8 +618,18 @@ function MainApp() {
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[var(--surface-main)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs px-3.5 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--accent-blue)]" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 bg-[var(--surface-main)] text-[var(--text-primary)] border text-xs px-3.5 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2 flex items-center gap-2 ${
+            toastVariant === 'error'
+              ? 'border-[var(--color-red)]/50'
+              : 'border-[var(--border-divider)]'
+          }`}
+        >
+          <div
+            className={`w-2 h-2 rounded-full ${
+              toastVariant === 'error' ? 'bg-[var(--color-red)]' : 'bg-[var(--accent-blue)]'
+            }`}
+          />
           <span>{toastMessage}</span>
         </div>
       )}

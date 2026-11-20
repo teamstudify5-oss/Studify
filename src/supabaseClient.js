@@ -1,13 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Read Supabase credentials from environment variables with fallback defaults
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "https://qmavgwghcolismyhfufn.supabase.co").trim();
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_c_GIM1sA7g9zcj9yXi-x_Q_OajYRgTT").trim();
+const metaEnv = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+export const SUPABASE_URL = (metaEnv.VITE_SUPABASE_URL || "https://qmavgwghcolismyhfufn.supabase.co").trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+export const SUPABASE_ANON_KEY = (metaEnv.VITE_SUPABASE_ANON_KEY || "sb_publishable_c_GIM1sA7g9zcj9yXi-x_Q_OajYRgTT").trim();
 
-// Normalize URL to remove any trailing slash or /rest/v1 path if provided
-const normalizedUrl = SUPABASE_URL.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
-
-export const supabase = createClient(normalizedUrl, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /**
  * Initiates Google OAuth sign in using Supabase.

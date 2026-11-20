@@ -482,14 +482,7 @@ export const Scene3Discovery: React.FC<{
             <line x1="0" y1="58" x2="140" y2="58" stroke="#111318" strokeWidth="0.7" />
             <line x1="0" y1="68" x2="150" y2="68" stroke="#111318" strokeWidth="0.7" />
 
-            {/* Symmetrical Verification Stamp in Center-Right */}
-            <g transform="translate(140, 64)">
-              <circle cx="12" cy="12" r="16" fill="none" stroke="#111318" strokeWidth="1" strokeDasharray="3 2" />
-              <circle cx="12" cy="12" r="13" fill="none" stroke="#111318" strokeWidth="0.5" />
-              <text x="12" y="14" fill="#111318" fontSize="6" fontFamily="monospace" fontWeight="bold" textAnchor="middle">
-                VERIFIED
-              </text>
-            </g>
+
           </g>
         </g>
       </svg>

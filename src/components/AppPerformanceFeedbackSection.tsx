@@ -78,7 +78,7 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
             className="btn-quad-border px-4 py-2.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] text-xs font-semibold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-xs"
           >
             <Star className="w-4 h-4 text-[var(--color-yellow)] fill-[var(--color-yellow)]" />
-            <span>{summary.userRating ? `Your Rating (${summary.userRating}★)` : 'Rate Studify'}</span>
+            <span>{summary.userRating ? `Your Rating: ${summary.userRating}/5` : 'Rate Studify'}</span>
           </button>
         </div>
       </div>

@@ -15,9 +15,10 @@ import {
   Edit2, 
   Trash2,
   MessageSquare,
+  RotateCcw,
   X
 } from 'lucide-react';
-import { Paper } from '../types';
+import { Paper, PaperRemovalNotice } from '../types';
 import { PaperViewer } from '../components/PaperViewer';
 import { storageService } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +26,7 @@ import { PaperCard } from '../components/PaperCard';
 import { AddToProjectModal } from '../components/workspace/AddToProjectModal';
 import { ReportRemovalModal } from '../components/ReportRemovalModal';
 import { EditCommunityPyqModal } from '../components/EditCommunityPyqModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { communityPyqService } from '../services/communityPyqService';
 import { supabaseDb } from '../services/supabaseDb';
 
@@ -37,6 +39,9 @@ interface PaperDetailsPageProps {
   onBookmarkPaper: (paper: Paper, e: React.MouseEvent) => void;
   isBookmarked: boolean;
   onRequireLogin: () => void;
+  onPaperUpdated?: (updated: Paper) => void;
+  onPaperDeleted?: (id: string) => void;
+  downloadingPaperIds?: Set<string>;
 }
 
 export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
@@ -48,9 +53,13 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   onBookmarkPaper,
   isBookmarked,
   onRequireLogin,
+  onPaperUpdated,
+  onPaperDeleted,
+  downloadingPaperIds,
 }) => {
   const { currentUser, isAuthenticated, isOwner } = useAuth();
   const [currentPaper, setCurrentPaper] = useState<Paper>(paper);
+  const [removalNotice, setRemovalNotice] = useState<PaperRemovalNotice | null>(null);
 
   // Ratings & reviews state
   const [selectedStars, setSelectedStars] = useState<number>(5);
@@ -59,7 +68,12 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   const [reviewSubmitted, setReviewSubmitted] = useState<boolean>(false);
   const [hasExistingUserRating, setHasExistingUserRating] = useState<boolean>(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
-  const [, setRatingError] = useState<string | null>(null);
+  const [ratingError, setRatingError] = useState<string | null>(null);
+  const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(false);
+  const [reviewsLoadError, setReviewsLoadError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Discussion comments state
   const [commentText, setCommentText] = useState<string>('');
@@ -76,13 +90,20 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
   // Edit submission state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const isUploader = Boolean(currentUser?.id && currentPaper.submittedBy?.id === currentUser.id);
-  const isAdmin = Boolean(isOwner || currentUser?.email?.toLowerCase().trim() === 'teamstudify5@gmail.com');
+  const isAdmin = Boolean(
+    isOwner ||
+      currentUser?.role === 'owner' ||
+      currentUser?.email?.toLowerCase().trim() === 'teamstudify5@gmail.com'
+  );
 
-  // Admin removal state
+  // Admin removal & restore state
   const [isAdminRemoveModalOpen, setIsAdminRemoveModalOpen] = useState(false);
   const [adminRemovalReason, setAdminRemovalReason] = useState('');
   const [isRemovingAdmin, setIsRemovingAdmin] = useState(false);
   const [adminRemoveError, setAdminRemoveError] = useState<string | null>(null);
+  const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
+  const [isRestoringAdmin, setIsRestoringAdmin] = useState(false);
+  const [adminRestoreError, setAdminRestoreError] = useState<string | null>(null);
 
   const handleAdminRemoval = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,25 +114,31 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     setIsRemovingAdmin(true);
     setAdminRemoveError(null);
     try {
+      const cleanReason = adminRemovalReason.trim();
       const res = await communityPyqService.removeCommunityPyqByAdmin(
         currentPaper.id,
-        adminRemovalReason.trim(),
+        cleanReason,
         currentUser?.email || 'teamstudify5@gmail.com'
       );
       if (!res.success || res.error) {
         throw res.error || new Error('Failed to remove paper.');
       }
 
-      setCurrentPaper((prev) => ({
-        ...prev,
+      const updatedPaper: Paper = {
+        ...currentPaper,
         status: 'removed',
-        removalReason: adminRemovalReason.trim(),
-        removedBy: currentUser?.email || 'teamstudify5@gmail.com',
+        isRemoved: true,
+        removalReason: cleanReason,
+        removedBy: currentUser?.email || 'Studify Administrator',
         removedAt: new Date().toISOString(),
-      }));
+      };
+      setCurrentPaper(updatedPaper);
+      onPaperUpdated?.(updatedPaper);
 
       setIsAdminRemoveModalOpen(false);
+      setAdminRemovalReason('');
       setReportToast('Paper marked as Removed by Administrator.');
+      setTimeout(() => setReportToast(null), 4000);
     } catch (err: any) {
       setAdminRemoveError(err.message || 'Removal failed. Please check network.');
     } finally {
@@ -119,50 +146,185 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     }
   };
 
-  const handleDeleteSubmission = async () => {
-    if (!window.confirm('Are you sure you want to delete this community submission? This cannot be undone.')) return;
+  const handleAdminRestore = async () => {
+    if (isRestoringAdmin) return;
+    setIsRestoringAdmin(true);
+    setAdminRestoreError(null);
     try {
-      await communityPyqService.deleteCommunityPyq(currentPaper.id, currentPaper.filePath || currentPaper.fileUrl);
-      storageService.deletePaper(currentPaper.id);
-      onBack();
-    } catch {
-      alert('Could not delete paper. Please try again.');
+      const res = await communityPyqService.restoreCommunityPyqByAdmin(currentPaper.id);
+      if (res.error || !res.paper) {
+        throw res.error || new Error('Could not restore paper.');
+      }
+      setCurrentPaper(res.paper);
+      setRemovalNotice(null);
+      storageService.savePaper(res.paper);
+      onPaperUpdated?.(res.paper);
+      setIsRestoreConfirmOpen(false);
+      setReportToast('Paper restored to published library.');
+      setTimeout(() => setReportToast(null), 4000);
+    } catch (err: any) {
+      setAdminRestoreError(err?.message || 'Restoration failed.');
+    } finally {
+      setIsRestoringAdmin(false);
+    }
+  };
+
+  const handleDeleteSubmission = async () => {
+    if (isDeleting) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await communityPyqService.deleteCommunityPyq(
+        currentPaper.id,
+        currentPaper.filePath || currentPaper.fileUrl
+      );
+      if (!res.success || res.error) {
+        const failedDetail =
+          res.failedPaths && res.failedPaths.length > 0
+            ? ` Failed storage files: ${res.failedPaths.map((f) => f.path).join(', ')}`
+            : '';
+        setDeleteError((res.error?.message || 'Could not delete paper. Please try again.') + failedDetail);
+        return;
+      }
+
+      setIsDeleteConfirmOpen(false);
+      if (onPaperDeleted) {
+        onPaperDeleted(currentPaper.id);
+      } else {
+        storageService.removePaperFromLocalCache(currentPaper.id);
+        onBack();
+      }
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Could not delete paper. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const loadRatingsForPaper = async (targetPaperId: string, isStillCurrent?: () => boolean) => {
+    setIsLoadingReviews(true);
+    setReviewsLoadError(null);
+    const realRatings = await supabaseDb.fetchPaperRatings(targetPaperId);
+    if (isStillCurrent && !isStillCurrent()) return;
+
+    setIsLoadingReviews(false);
+
+    if (realRatings.error) {
+      setReviewsLoadError(realRatings.error.message || 'Unable to load reviews right now.');
+      return;
+    }
+
+    setReviewsLoadError(null);
+    if (realRatings.ratingCount > 0 && realRatings.rating !== undefined) {
+      setCurrentPaper((prev) => ({
+        ...prev,
+        rating: realRatings.rating,
+        ratingCount: realRatings.ratingCount,
+        reviews: realRatings.reviews,
+      }));
+    } else {
+      setCurrentPaper((prev) => ({
+        ...prev,
+        rating: undefined,
+        ratingCount: 0,
+        reviews: [],
+      }));
+    }
+
+    if (realRatings.userRating) {
+      setSelectedStars(realRatings.userRating);
+      setReviewText(realRatings.userReviewText || '');
+      setHasExistingUserRating(true);
+    } else {
+      setSelectedStars(5);
+      setReviewText('');
+      setHasExistingUserRating(false);
     }
   };
 
   useEffect(() => {
-    storageService.recordView(paper.id);
+    let active = true;
+    setDeleteError(null);
+    setRatingError(null);
+    setReviewSubmitted(false);
+    setRemovalNotice(null);
+
     const refreshed = storageService.getPaperById(paper.id);
-    if (refreshed) {
-      setCurrentPaper(refreshed);
+    const initial = refreshed || paper;
+    setCurrentPaper(initial);
+
+    if (initial.status === 'removed' || initial.isRemoved) {
+      communityPyqService.getPaperRemovalNotice(paper.id).then((notice) => {
+        if (active && notice) setRemovalNotice(notice);
+      });
+      if (!isAdmin && !isUploader) {
+        return () => {
+          active = false;
+        };
+      }
     } else {
-      setCurrentPaper(paper);
+      // Verify live accessibility (if paper was just unpublished remotely, load safe notice)
+      communityPyqService.getCommunityPyqById(paper.id).then((livePaper) => {
+        if (!active) return;
+        if (livePaper) {
+          setCurrentPaper(livePaper);
+          if (livePaper.status !== 'removed') {
+            storageService.recordView(livePaper.id);
+          }
+        } else {
+          communityPyqService.getPaperRemovalNotice(paper.id).then((notice) => {
+            if (active && notice) {
+              setRemovalNotice(notice);
+              setCurrentPaper((prev) => ({
+                ...prev,
+                status: 'removed',
+                isRemoved: true,
+                removalReason: notice.removalReason,
+                removedAt: notice.removedAt,
+                removedBy: notice.removedBy,
+              }));
+            }
+          });
+        }
+      });
     }
 
-    supabaseDb.fetchPaperRatings(paper.id).then((realRatings: any) => {
-      if (realRatings.ratingCount > 0 && realRatings.rating !== undefined) {
-        setCurrentPaper((prev) => ({
-          ...prev,
-          rating: realRatings.rating,
-          ratingCount: realRatings.ratingCount,
-          reviews: realRatings.reviews as any,
-        }));
-      } else {
-        setCurrentPaper((prev) => ({
-          ...prev,
-          rating: undefined,
-          ratingCount: 0,
-          reviews: realRatings.reviews || [],
-        }));
-      }
+    loadRatingsForPaper(paper.id, () => active);
 
-      if (realRatings.userRating) {
-        setSelectedStars(realRatings.userRating);
-        if (realRatings.userReviewText) setReviewText(realRatings.userReviewText);
-        setHasExistingUserRating(true);
-      }
+    return () => {
+      active = false;
+    };
+  }, [paper.id, paper.status, currentUser?.id, isAdmin, isUploader]);
+
+  useEffect(() => {
+    setCurrentPaper((prev) => {
+      if (prev.id !== paper.id) return prev;
+      return {
+        ...prev,
+        title: paper.title,
+        subject: paper.subject,
+        grade: paper.grade,
+        examBoard: paper.examBoard,
+        year: paper.year,
+        chapter: paper.chapter,
+        description: paper.description,
+        totalMarks: paper.totalMarks,
+        timeAllowedMinutes: paper.timeAllowedMinutes,
+      };
     });
-  }, [paper.id, currentUser]);
+  }, [
+    paper.id,
+    paper.title,
+    paper.subject,
+    paper.grade,
+    paper.examBoard,
+    paper.year,
+    paper.chapter,
+    paper.description,
+    paper.totalMarks,
+    paper.timeAllowedMinutes,
+  ]);
 
   useEffect(() => {
     if (currentUser?.name && !reviewerName) {
@@ -179,6 +341,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
     setIsSubmittingReview(true);
     setRatingError(null);
+    setReviewSubmitted(false);
 
     const author = reviewerName.trim() || currentUser?.name || 'Student';
     const result = await supabaseDb.submitPaperRating(currentPaper.id, selectedStars, reviewText, author);
@@ -190,12 +353,17 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     }
 
     const refreshed = await supabaseDb.fetchPaperRatings(currentPaper.id);
-    setCurrentPaper((prev) => ({
-      ...prev,
-      rating: refreshed.rating,
-      ratingCount: refreshed.ratingCount,
-      reviews: refreshed.reviews as any,
-    }));
+    if (refreshed.error) {
+      setReviewsLoadError(refreshed.error.message);
+    } else {
+      setReviewsLoadError(null);
+      setCurrentPaper((prev) => ({
+        ...prev,
+        rating: refreshed.rating,
+        ratingCount: refreshed.ratingCount,
+        reviews: refreshed.reviews,
+      }));
+    }
 
     setHasExistingUserRating(true);
     setReviewSubmitted(true);
@@ -234,6 +402,74 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
     )
     .slice(0, 3);
 
+  const isPaperRemoved = currentPaper.status === 'removed' || Boolean(currentPaper.isRemoved) || Boolean(removalNotice);
+  const canInspectRemovedContent = !isPaperRemoved || isAdmin || isUploader;
+  const isDownloading = Boolean(downloadingPaperIds?.has(currentPaper.id));
+  const downloadActionLabel = isDownloading
+    ? 'Preparing Download...'
+    : currentPaper.isImageBased
+    ? (currentPaper.imagePaths?.length || currentPaper.imageUrls?.length || 1) > 1
+      ? 'Download Photos (.zip)'
+      : 'Download Photo'
+    : currentPaper.fileName?.toLowerCase().endsWith('.zip')
+    ? 'Download ZIP'
+    : 'Download PDF';
+
+  if (isPaperRemoved && !canInspectRemovedContent) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+        >
+          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+          <span>Back to question papers</span>
+        </button>
+
+        <div className="bg-[var(--surface-main)] border border-rose-500/35 rounded-2xl p-6 sm:p-8 space-y-4 shadow-sm animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-400">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-400">
+                Official Administrator Notice
+              </span>
+              <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
+                {removalNotice?.title || currentPaper.title}
+              </h1>
+              <div className="text-xs text-[var(--text-secondary)] flex flex-wrap gap-1.5">
+                <span>{removalNotice?.examBoard || currentPaper.examBoard}</span>
+                <span>·</span>
+                <span>{removalNotice?.grade || currentPaper.grade}</span>
+                <span>·</span>
+                <span>{removalNotice?.subject || currentPaper.subject}</span>
+                <span>·</span>
+                <span className="font-mono">{removalNotice?.year || currentPaper.year}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 space-y-1.5 text-xs">
+            <div className="font-semibold text-rose-300">
+              This question paper has been unpublished by an administrator and is no longer available for preview or download.
+            </div>
+            <div className="text-[var(--text-primary)] whitespace-pre-line">
+              <strong>Reason:</strong> {removalNotice?.removalReason || currentPaper.removalReason || 'Removed following moderation review.'}
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)] pt-1 flex flex-wrap gap-3">
+              <span>Action by: {removalNotice?.removedBy || 'Studify Administrator'}</span>
+              {(removalNotice?.removedAt || currentPaper.removedAt) && (
+                <span>Date: {new Date((removalNotice?.removedAt || currentPaper.removedAt)!).toLocaleDateString()}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       {/* Top Navigation Strip */}
@@ -248,32 +484,36 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         </button>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Uploader Edit & Delete Controls */}
+          {/* Uploader Edit & Uploader/Admin Delete Controls */}
           {isUploader && (
-            <>
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
-                title="Edit this submission"
-              >
-                <Edit2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
-                <span>Edit</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteSubmission}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-red-bg)] text-[var(--color-red)] hover:opacity-90 border border-[var(--color-red)]/30 transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
-                title="Delete your submission"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
+              title="Edit this submission"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+              <span>Edit</span>
+            </button>
+          )}
+          {(isUploader || isAdmin) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setIsDeleteConfirmOpen(true);
+              }}
+              disabled={isDeleting}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-red-bg)] text-[var(--color-red)] hover:opacity-90 border border-[var(--color-red)]/30 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 btn-quad-border"
+              title="Delete submission permanently"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+            </button>
           )}
 
-          {/* Administrator Remove Control */}
-          {isAdmin && currentPaper.status !== 'removed' && (
+          {/* Administrator Remove / Restore Control */}
+          {isAdmin && !isPaperRemoved && (
             <button
               type="button"
               onClick={() => setIsAdminRemoveModalOpen(true)}
@@ -282,6 +522,22 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             >
               <ShieldAlert className="w-3.5 h-3.5" />
               <span>Admin Remove</span>
+            </button>
+          )}
+
+          {isAdmin && isPaperRemoved && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdminRestoreError(null);
+                setIsRestoreConfirmOpen(true);
+              }}
+              disabled={isRestoringAdmin}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-blue)] hover:opacity-90 text-white transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Administrator: Restore paper back to published library"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{isRestoringAdmin ? 'Restoring...' : 'Restore Paper'}</span>
             </button>
           )}
 
@@ -320,25 +576,55 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
           <button
             type="button"
+            disabled={isDownloading}
             onClick={() => onDownloadPaper(currentPaper)}
-            className="px-3 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs flex items-center gap-1.5 cursor-pointer btn-quad-border"
+            className="px-3 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60 btn-quad-border"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Download PDF</span>
+            <span>{downloadActionLabel}</span>
           </button>
         </div>
       </div>
 
-      {/* Moderation Warning Banner for Removed Papers */}
-      {currentPaper.status === 'removed' && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 space-y-1 shadow-xs animate-in fade-in">
-          <div className="font-bold flex items-center gap-2 text-sm">
-            <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>Removed by Administrator</span>
+      {/* Inline Deletion Error Banner (shown when dialog is closed) */}
+      {deleteError && !isDeleteConfirmOpen && (
+        <div className="p-3.5 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs flex items-center justify-between gap-2 animate-in fade-in">
+          <span>{deleteError}</span>
+          <button
+            type="button"
+            onClick={() => setDeleteError(null)}
+            className="underline cursor-pointer shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Moderation Warning Banner for Removed Papers (Admin / Uploader view) */}
+      {isPaperRemoved && (
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="space-y-1">
+            <div className="font-bold flex items-center gap-2 text-sm">
+              <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+              <span>Removed / Unpublished by Administrator</span>
+            </div>
+            <div className="text-xs text-[var(--text-secondary)] whitespace-pre-line pl-6 font-mono">
+              Reason: {currentPaper.removalReason || removalNotice?.removalReason || 'Removed following moderation review.'}
+            </div>
           </div>
-          <div className="text-xs text-[var(--text-secondary)] whitespace-pre-line pl-6 font-mono">
-            Reason: {currentPaper.removalReason || 'Violated community guidelines or copyright'}
-          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdminRestoreError(null);
+                setIsRestoreConfirmOpen(true);
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-blue)] text-white hover:opacity-90 flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restore Paper</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -427,6 +713,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         <PaperViewer
           paper={currentPaper}
           onDownload={() => onDownloadPaper(currentPaper)}
+          isDownloading={isDownloading}
         />
       </div>
 
@@ -505,6 +792,12 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             </div>
           </div>
 
+          {ratingError && (
+            <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs">
+              {ratingError}
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-1">
             {reviewSubmitted ? (
               <span className="text-xs text-[var(--color-green)] font-medium flex items-center gap-1">
@@ -529,7 +822,22 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
         {/* Existing Reviews List */}
         <div className="space-y-2.5 pt-1">
-          {currentPaper.reviews && currentPaper.reviews.length > 0 ? (
+          {isLoadingReviews ? (
+            <div className="text-center py-4 text-xs text-[var(--text-muted)]">
+              Loading reviews...
+            </div>
+          ) : reviewsLoadError ? (
+            <div className="p-3 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-center justify-between gap-2">
+              <span>Could not load reviews: {reviewsLoadError}</span>
+              <button
+                type="button"
+                onClick={() => loadRatingsForPaper(currentPaper.id)}
+                className="px-2.5 py-1 rounded bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-primary)] font-medium cursor-pointer shrink-0"
+              >
+                Retry
+              </button>
+            </div>
+          ) : currentPaper.reviews && currentPaper.reviews.length > 0 ? (
             currentPaper.reviews.map((r) => (
               <div
                 key={r.id}
@@ -719,15 +1027,16 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       )}
 
       {/* Edit Community Submission Modal */}
-      {isUploader && (
+      {isUploader && isEditModalOpen && (
         <EditCommunityPyqModal
           paper={currentPaper}
-          isOpen={isEditModalOpen}
+          isOpen={true}
           onClose={() => setIsEditModalOpen(false)}
           onUpdated={(updated) => {
+            setIsEditModalOpen(false);
             setCurrentPaper(updated);
-            const all = storageService.getPapers();
-            storageService.savePapers(all.map((p) => (p.id === updated.id ? updated : p)));
+            storageService.savePaper(updated);
+            onPaperUpdated?.(updated);
           }}
         />
       )}
@@ -800,6 +1109,44 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {isDeleteConfirmOpen && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Delete Submission Permanently"
+          description={`Are you sure you want to permanently delete "${currentPaper.title}" and remove its stored document files? This action cannot be undone.`}
+          confirmLabel="Delete Permanently"
+          isBusy={isDeleting}
+          errorMessage={deleteError}
+          onConfirm={handleDeleteSubmission}
+          onCancel={() => {
+            if (!isDeleting) {
+              setIsDeleteConfirmOpen(false);
+              setDeleteError(null);
+            }
+          }}
+        />
+      )}
+
+      {isRestoreConfirmOpen && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Restore Unpublished Paper"
+          description={`Restore "${currentPaper.title}" back to its previous published state? Existing reviews, ratings, bookmarks, and files will remain intact, and the public removal notice will be cleared.`}
+          confirmLabel="Restore Paper"
+          tone="primary"
+          busyLabel="Restoring..."
+          isBusy={isRestoringAdmin}
+          errorMessage={adminRestoreError}
+          onConfirm={handleAdminRestore}
+          onCancel={() => {
+            if (!isRestoringAdmin) {
+              setIsRestoreConfirmOpen(false);
+              setAdminRestoreError(null);
+            }
+          }}
+        />
       )}
     </div>
   );

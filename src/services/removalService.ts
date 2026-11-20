@@ -5,15 +5,31 @@ import { supabaseDb } from './supabaseDb';
 
 const REPORTS_CACHE_KEY = 'studify_reports_cache_v3';
 
+// In-memory runtime store only — never persisted in localStorage
+let inMemoryReports: PaperRemovalRequest[] = [];
+
+function clearLegacyReportsCache() {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(REPORTS_CACHE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+clearLegacyReportsCache();
+
 export const removalService = {
   /**
-   * Fetch all reports for the administrator queue from community_reports table.
+   * Fetch all reports for the administrator queue from paper_reports table.
    */
   async getReportsForAdmin(): Promise<PaperRemovalRequest[]> {
+    clearLegacyReportsCache();
     try {
-      const reports = await supabaseDb.fetchReports();
-      if (reports && reports.length > 0) {
-        const mapped: PaperRemovalRequest[] = reports.map((r: any) => ({
+      const res = await supabaseDb.fetchReportsWithStatus();
+      if (res.synced) {
+        const mapped: PaperRemovalRequest[] = res.reports.map((r: any) => ({
           id: r.id,
           paperId: r.paper_id,
           paperTitle: r.paper?.title || 'Question Paper',
@@ -30,17 +46,19 @@ export const removalService = {
           status: r.status,
           createdAt: r.created_at,
           resolvedAt: r.resolved_at,
-          adminDecision: r.admin_notes,
-          adminNotes: r.admin_notes,
+          adminDecision: r.resolution_notes || r.admin_notes,
+          adminNotes: r.resolution_notes || r.admin_notes,
         }));
 
         this.saveLocalReports(mapped);
         return mapped;
       }
 
-      return this.getLocalReports();
+      this.clearLocalReports();
+      return [];
     } catch {
-      return this.getLocalReports();
+      this.clearLocalReports();
+      return [];
     }
   },
 
@@ -53,7 +71,7 @@ export const removalService = {
   },
 
   /**
-   * Submit a new database-backed report.
+   * Submit a new database-backed report. Fails explicitly if database insert fails.
    */
   async createRequest(params: {
     paper: Paper;
@@ -63,16 +81,20 @@ export const removalService = {
     reasonDetails: string;
     evidenceUrl?: string;
   }): Promise<{ success: boolean; error?: string; request?: PaperRemovalRequest }> {
-    try {
-      await supabaseDb.submitReport({
-        paperId: params.paper.id,
-        reasonCategory: params.reasonCategory,
-        reasonDetails: params.reasonDetails,
-        reporterEmail: params.reporterEmail || '',
-        reporterName: params.reporterName || 'Student',
-      });
-    } catch (err: any) {
-      return { success: false, error: err.message };
+    const submitRes = await supabaseDb.submitReport({
+      paperId: params.paper.id,
+      reasonCategory: params.reasonCategory,
+      reasonDetails: params.reasonDetails,
+      evidenceUrl: params.evidenceUrl,
+      reporterEmail: params.reporterEmail || '',
+      reporterName: params.reporterName || 'Student',
+    });
+
+    if (!submitRes.success) {
+      return {
+        success: false,
+        error: submitRes.error?.message || 'Could not submit report to database.',
+      };
     }
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -95,8 +117,7 @@ export const removalService = {
       createdAt: new Date().toISOString(),
     };
 
-    const existing = this.getLocalReports();
-    this.saveLocalReports([newReport, ...existing]);
+    this.saveLocalReports([newReport, ...inMemoryReports]);
 
     return { success: true, request: newReport };
   },
@@ -105,14 +126,12 @@ export const removalService = {
    * Dismiss a report without taking down the paper.
    */
   async dismissRequest(requestId: string, adminNotes?: string): Promise<boolean> {
-    try {
-      await supabaseDb.updateReportStatus(requestId, 'dismissed', adminNotes);
-    } catch (err) {
-      console.warn('Dismiss report warning:', err);
+    const res = await supabaseDb.updateReportStatus(requestId, 'dismissed', adminNotes);
+    if (!res.success) {
+      return false;
     }
 
-    const all = this.getLocalReports();
-    const updated = all.map((r) =>
+    const updated = inMemoryReports.map((r) =>
       r.id === requestId
         ? {
             ...r,
@@ -131,14 +150,15 @@ export const removalService = {
    * Complete takedown via admin procedure.
    */
   async removePaperViaRequest(requestId: string, paperId: string, reason?: string): Promise<boolean> {
-    try {
-      await supabaseDb.takedownPaper(paperId, reason || 'Paper taken down following verified community report.');
-    } catch (err) {
-      console.warn('Admin takedown warning:', err);
+    const res = await supabaseDb.takedownPaper(
+      paperId,
+      reason || 'Paper taken down following verified community report.'
+    );
+    if (!res.success) {
+      return false;
     }
 
-    const all = this.getLocalReports();
-    const updated = all.map((r) =>
+    const updated = inMemoryReports.map((r) =>
       r.id === requestId || r.paperId === paperId
         ? {
             ...r,
@@ -154,20 +174,21 @@ export const removalService = {
   },
 
   getLocalReports(): PaperRemovalRequest[] {
-    try {
-      const stored = localStorage.getItem(REPORTS_CACHE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
+    return [...inMemoryReports];
   },
 
   saveLocalReports(reports: PaperRemovalRequest[]): void {
+    inMemoryReports = Array.isArray(reports) ? [...reports] : [];
+    clearLegacyReportsCache();
     try {
-      localStorage.setItem(REPORTS_CACHE_KEY, JSON.stringify(reports));
       window.dispatchEvent(new CustomEvent('studify:removal-requests-updated'));
     } catch {
       // ignore
     }
+  },
+
+  clearLocalReports(): void {
+    inMemoryReports = [];
+    clearLegacyReportsCache();
   },
 };

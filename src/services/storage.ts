@@ -1,66 +1,70 @@
-import { Paper, PaperStatus, PaperReview, PaperComment } from '../types';
-import { SAMPLE_PAPERS } from '../data/samplePapers';
+import { Paper, PaperStatus, PaperComment } from '../types';
 import { supabaseDb } from './supabaseDb';
-import { supabaseStorage } from './supabaseStorage';
 import { communityPyqService } from './communityPyqService';
 
-const PAPERS_STORAGE_KEY = 'pyq_papers_clean_v3';
-const SAVED_PAPERS_STORAGE_KEY = 'pyq_saved_paper_ids_clean_v3';
-const LEGACY_PAPERS_PURGED = 'studify_test_papers_purged_v3';
+const LEGACY_PAPER_CACHE_KEYS = [
+  'pyq_papers_clean_v3',
+  'pyq_papers_v2',
+  'pyq_papers',
+  'studify_test_papers_purged_v3',
+] as const;
 
-// Clean out legacy v1/v2 keys safely without removing user's v3 data
-function purgeLegacyTestPapers() {
+const LEGACY_BOOKMARK_CACHE_KEYS = [
+  'pyq_saved_paper_ids_v2',
+  'pyq_saved_paper_ids',
+] as const;
+
+const SAVED_PAPERS_STORAGE_KEY = 'pyq_saved_paper_ids_clean_v3';
+
+// In-memory store only for the active runtime session — never resurrected from stale localStorage
+let inMemoryPapers: Paper[] = [];
+let inMemorySavedPaperIds: string[] = [];
+
+function purgeStalePaperCacheKeys() {
+  if (typeof window === 'undefined') return;
   try {
-    if (!localStorage.getItem(LEGACY_PAPERS_PURGED)) {
-      localStorage.removeItem('pyq_papers_v2');
-      localStorage.removeItem('pyq_papers');
-      localStorage.removeItem('pyq_saved_paper_ids_v2');
-      localStorage.removeItem('pyq_saved_paper_ids');
-      // Bug 13 fix: Never delete current v3 user data
-      localStorage.setItem(LEGACY_PAPERS_PURGED, 'true');
+    for (const key of LEGACY_PAPER_CACHE_KEYS) {
+      localStorage.removeItem(key);
     }
-  } catch (e) {
-    // ignore
+    for (const key of LEGACY_BOOKMARK_CACHE_KEYS) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // ignore storage errors
   }
 }
 
-purgeLegacyTestPapers();
+purgeStalePaperCacheKeys();
 
 export const storageService = {
-  // Sync papers from Supabase Community PYQ Library
-  async fetchPapersFromSupabase(): Promise<Paper[]> {
-    try {
-      const communityPapers = await communityPyqService.fetchCommunityPyqs();
-      if (communityPapers && communityPapers.length > 0) {
-        this.savePapers(communityPapers);
-        return communityPapers;
-      }
-      return this.getPapers();
-    } catch (e) {
-      console.warn('Could not fetch papers from Supabase community_pyqs:', e);
-      return this.getPapers();
+  /**
+   * Authoritative sync from Supabase (`community_pyqs`).
+   * - Never preloads or falls back to stale localStorage papers.
+   * - Empty DB (`[]`) always overwrites in-memory state cleanly.
+   */
+  async fetchPapersFromSupabaseWithStatus(): Promise<{ papers: Paper[]; synced: boolean; error: Error | null }> {
+    purgeStalePaperCacheKeys();
+    const res = await communityPyqService.fetchCommunityPyqsWithStatus();
+    if (!res.error) {
+      inMemoryPapers = res.papers;
+      return { papers: inMemoryPapers, synced: true, error: null };
     }
+    inMemoryPapers = [];
+    return { papers: [], synced: false, error: res.error };
   },
 
-  // Initialize storage cleanly - blank if empty
+  async fetchPapersFromSupabase(): Promise<Paper[]> {
+    const res = await this.fetchPapersFromSupabaseWithStatus();
+    return res.papers;
+  },
+
   getPapers(): Paper[] {
-    try {
-      const stored = localStorage.getItem(PAPERS_STORAGE_KEY);
-      if (!stored) {
-        return [];
-      }
-      return JSON.parse(stored);
-    } catch {
-      return [];
-    }
+    return [...inMemoryPapers];
   },
 
   savePapers(papers: Paper[]): void {
-    try {
-      localStorage.setItem(PAPERS_STORAGE_KEY, JSON.stringify(papers));
-    } catch (e) {
-      console.error('Failed to save papers to localStorage', e);
-    }
+    inMemoryPapers = Array.isArray(papers) ? [...papers] : [];
+    purgeStalePaperCacheKeys();
   },
 
   savePaper(paper: Paper): void {
@@ -75,8 +79,7 @@ export const storageService = {
   },
 
   getApprovedPapers(): Paper[] {
-    const all = this.getPapers();
-    return all.filter((p) => p.status === 'approved');
+    return inMemoryPapers.filter((p) => p.status === 'approved' || p.status === 'active');
   },
 
   getAllPapersForOwner(): Paper[] {
@@ -84,19 +87,16 @@ export const storageService = {
   },
 
   getUserSubmissions(userId: string): Paper[] {
-    const all = this.getPapers();
-    return all.filter((p) => p.submittedBy.id === userId);
+    return inMemoryPapers.filter((p) => p.submittedBy.id === userId);
   },
 
   getPaperById(id: string): Paper | undefined {
-    const all = this.getPapers();
-    return all.find((p) => p.id === id);
+    return inMemoryPapers.find((p) => p.id === id);
   },
 
   submitPaper(
     data: Omit<Paper, 'id' | 'status' | 'submittedAt' | 'viewsCount' | 'downloadsCount'> & { id?: string },
   ): Paper {
-    const papers = this.getPapers();
     const newPaper: Paper = {
       ...data,
       id: data.id || `pyq-user-${Date.now()}`,
@@ -104,16 +104,13 @@ export const storageService = {
       submittedAt: new Date().toISOString(),
       viewsCount: 0,
       downloadsCount: 0,
-      // Priority 3: Do not fabricate ratings on new papers
       rating: undefined,
       ratingCount: 0,
       reviews: [],
       comments: [],
     };
-    papers.unshift(newPaper);
-    this.savePapers(papers);
+    inMemoryPapers = [newPaper, ...inMemoryPapers];
 
-    // Real Supabase insert query
     supabaseDb.createPaper(newPaper).catch((e) => console.warn('Supabase createPaper failed', e));
 
     return newPaper;
@@ -134,77 +131,134 @@ export const storageService = {
     papers[index] = updated;
     this.savePapers(papers);
 
-    // Real Supabase update query
     supabaseDb.updatePaper(id, { status }).catch((e) => console.warn('Supabase updatePaper failed', e));
 
     return updated;
   },
 
-  deletePaper(id: string): boolean {
-    const papers = this.getPapers();
-    const paperToDelete = papers.find((p) => p.id === id);
-    const filtered = papers.filter((p) => p.id !== id);
-    if (filtered.length === papers.length) return false;
-    this.savePapers(filtered);
+  removePaperFromLocalCache(id: string): boolean {
+    const prevLength = inMemoryPapers.length;
+    inMemoryPapers = inMemoryPapers.filter((p) => p.id !== id);
+    inMemorySavedPaperIds = inMemorySavedPaperIds.filter((savedId) => savedId !== id);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        if (inMemorySavedPaperIds.length === 0) {
+          localStorage.removeItem(SAVED_PAPERS_STORAGE_KEY);
+        } else {
+          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(inMemorySavedPaperIds));
+        }
+      } catch {
+        // ignore
+      }
+    }
+    purgeStalePaperCacheKeys();
+    return inMemoryPapers.length !== prevLength;
+  },
 
-    // Delete from community_pyqs table and community-pyqs bucket
-    communityPyqService.deleteCommunityPyq(id, paperToDelete?.filePath || paperToDelete?.fileUrl).catch((e) => {
-      console.warn('Community paper deletion error:', e);
-    });
-
-    return true;
+  async deletePaper(id: string): Promise<boolean> {
+    const target = inMemoryPapers.find((p) => p.id === id);
+    const res = await communityPyqService.deleteCommunityPyq(id, target?.filePath || target?.fileUrl);
+    if (res.success) {
+      this.removePaperFromLocalCache(id);
+      return true;
+    }
+    return false;
   },
 
   recordView(id: string): void {
-    const papers = this.getPapers();
-    const p = papers.find((item) => item.id === id);
+    const p = inMemoryPapers.find((item) => item.id === id);
     if (p) {
       p.viewsCount = (p.viewsCount || 0) + 1;
-      this.savePapers(papers);
     }
-    // Hardened RPC increment
     communityPyqService.incrementView(id);
   },
 
   recordDownload(id: string): void {
-    const papers = this.getPapers();
-    const p = papers.find((item) => item.id === id);
+    const p = inMemoryPapers.find((item) => item.id === id);
     if (p) {
       p.downloadsCount = (p.downloadsCount || 0) + 1;
-      this.savePapers(papers);
     }
-    // Hardened RPC increment
     communityPyqService.incrementDownload(id);
   },
 
-  // Saved bookmarks - Bug 11 & Bug 12 & Bug 16 fixed
-  async fetchSavedPaperIdsFromSupabase(): Promise<string[]> {
-    try {
-      const ids = await supabaseDb.loadSavedPaperIds();
-      // Bug 12 fix: When user has 0 bookmarks in Supabase, an empty array is a valid result.
-      // An empty database result must remain empty and not fall back to stale local bookmarks.
-      if (Array.isArray(ids)) {
-        localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(ids));
-        return ids;
+  /**
+   * Authoritative bookmark sync from Supabase `saved_papers`.
+   * Signed-out users always receive `[]`; stale localStorage bookmarks are cleared.
+   */
+  async fetchSavedPaperIdsFromSupabaseWithStatus(): Promise<{ ids: string[]; synced: boolean; error: Error | null }> {
+    const res = await supabaseDb.loadSavedPaperIdsWithStatus();
+    if (res.synced) {
+      inMemorySavedPaperIds = res.ids;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          if (res.ids.length === 0) {
+            localStorage.removeItem(SAVED_PAPERS_STORAGE_KEY);
+          } else {
+            localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(res.ids));
+          }
+        } catch {
+          // ignore
+        }
       }
-      return this.getSavedPaperIds();
-    } catch {
-      return this.getSavedPaperIds();
+      return { ids: [...inMemorySavedPaperIds], synced: true, error: null };
+    }
+    inMemorySavedPaperIds = [];
+    return { ids: [], synced: false, error: res.error };
+  },
+
+  async fetchSavedPaperIdsFromSupabase(): Promise<string[]> {
+    const res = await this.fetchSavedPaperIdsFromSupabaseWithStatus();
+    return res.ids;
+  },
+
+  /**
+   * Prunes savedPaperIds that point to papers no longer present in the authoritative library.
+   * Only runs when `papers` has been authoritatively synced (`synced: true`).
+   */
+  async pruneInvalidSavedPaperIds(validPaperIds: Set<string>): Promise<string[]> {
+    const current = [...inMemorySavedPaperIds];
+    const invalidIds = current.filter((id) => !validPaperIds.has(id));
+    if (invalidIds.length === 0) {
+      return current;
+    }
+
+    const validOnly = current.filter((id) => validPaperIds.has(id));
+    inMemorySavedPaperIds = validOnly;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        if (validOnly.length === 0) {
+          localStorage.removeItem(SAVED_PAPERS_STORAGE_KEY);
+        } else {
+          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(validOnly));
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    await supabaseDb.pruneInvalidSavedPapers(invalidIds);
+    return validOnly;
+  },
+
+  clearInMemoryState(): void {
+    inMemoryPapers = [];
+    inMemorySavedPaperIds = [];
+    purgeStalePaperCacheKeys();
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(SAVED_PAPERS_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
     }
   },
 
   getSavedPaperIds(): string[] {
-    try {
-      const stored = localStorage.getItem(SAVED_PAPERS_STORAGE_KEY);
-      // Bug 11 fix: Remove fabricated default bookmarks ['pyq-cbse-12-phy-2024', 'pyq-jee-main-2024-session1']
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
+    return [...inMemorySavedPaperIds];
   },
 
   isPaperSaved(id: string): boolean {
-    return this.getSavedPaperIds().includes(id);
+    return inMemorySavedPaperIds.includes(id);
   },
 
   async toggleSavePaperAsync(id: string): Promise<{ isSaved: boolean; error: Error | null }> {
@@ -213,7 +267,6 @@ export const storageService = {
       const exists = saved.includes(id);
       const next = exists ? saved.filter((i) => i !== id) : [...saved, id];
 
-      // Bug 16 fix: Await Supabase operation and confirm before updating local state
       let opSuccess = false;
       if (exists) {
         opSuccess = await supabaseDb.removeSavedPaper(id);
@@ -225,7 +278,14 @@ export const storageService = {
         return { isSaved: exists, error: new Error('Failed to update bookmark in database') };
       }
 
-      localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(next));
+      inMemorySavedPaperIds = next;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+      }
       return { isSaved: !exists, error: null };
     } catch (err: any) {
       return { isSaved: this.isPaperSaved(id), error: err instanceof Error ? err : new Error(String(err)) };
@@ -237,17 +297,34 @@ export const storageService = {
       const saved = this.getSavedPaperIds();
       const exists = saved.includes(id);
       const next = exists ? saved.filter((i) => i !== id) : [...saved, id];
-      localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(next));
+      inMemorySavedPaperIds = next;
+      try {
+        localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
 
       if (exists) {
-        supabaseDb.removeSavedPaper(id).catch((e) => {
-          console.warn('Supabase removeSavedPaper failed, rolling back', e);
-          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(saved));
+        supabaseDb.removeSavedPaper(id).then((ok) => {
+          if (!ok) {
+            inMemorySavedPaperIds = saved;
+            try {
+              localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(saved));
+            } catch {
+              // ignore
+            }
+          }
         });
       } else {
-        supabaseDb.savePaper(id).catch((e) => {
-          console.warn('Supabase savePaper failed, rolling back', e);
-          localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(saved));
+        supabaseDb.savePaper(id).then((ok) => {
+          if (!ok) {
+            inMemorySavedPaperIds = saved;
+            try {
+              localStorage.setItem(SAVED_PAPERS_STORAGE_KEY, JSON.stringify(saved));
+            } catch {
+              // ignore
+            }
+          }
         });
       }
 
@@ -259,40 +336,11 @@ export const storageService = {
 
   getBookmarkedPapers(): Paper[] {
     const savedIds = this.getSavedPaperIds();
-    const all = this.getPapers();
-    return all.filter((p) => savedIds.includes(p.id));
+    return inMemoryPapers.filter((p) => savedIds.includes(p.id));
   },
 
-  // Ratings & reviews (No login required)
-  addReview(paperId: string, stars: number, text?: string, authorName: string = 'Student'): Paper | null {
-    const papers = this.getPapers();
-    const paper = papers.find((p) => p.id === paperId);
-    if (!paper) return null;
-
-    const newReview: PaperReview = {
-      id: `rev-${Date.now()}`,
-      stars,
-      text: text?.trim(),
-      authorName: authorName.trim() || 'Student',
-      createdAt: new Date().toISOString(),
-    };
-
-    const currentReviews = paper.reviews || [];
-    currentReviews.unshift(newReview);
-    paper.reviews = currentReviews;
-
-    const totalStars = currentReviews.reduce((acc, r) => acc + r.stars, 0);
-    paper.rating = Number((totalStars / currentReviews.length).toFixed(1));
-    paper.ratingCount = currentReviews.length;
-
-    this.savePapers(papers);
-    return paper;
-  },
-
-  // Comments (Login required)
   addComment(paperId: string, text: string, authorName: string, authorEmail?: string): Paper | null {
-    const papers = this.getPapers();
-    const paper = papers.find((p) => p.id === paperId);
+    const paper = inMemoryPapers.find((p) => p.id === paperId);
     if (!paper) return null;
 
     const newComment: PaperComment = {
@@ -307,7 +355,6 @@ export const storageService = {
     currentComments.unshift(newComment);
     paper.comments = currentComments;
 
-    this.savePapers(papers);
     return paper;
   },
 };

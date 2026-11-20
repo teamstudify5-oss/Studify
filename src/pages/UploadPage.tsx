@@ -142,14 +142,14 @@ export const UploadPage: React.FC<UploadPageProps> = ({
   // Add photographs from file picker or camera
   const handleAddPhotoFiles = (files: FileList | File[]) => {
     const newItems: SelectedPhotoItem[] = [];
-    const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
+    const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
       if (!ALLOWED_EXTENSIONS.includes(ext) && !file.type.startsWith('image/')) {
-        setErrorMessage(`"${file.name}" has an unsupported format. Only JPG, PNG, and WEBP photographs are permitted.`);
+        setErrorMessage(`"${file.name}" has an unsupported format. Only JPG, PNG, WEBP, GIF, and SVG images are permitted.`);
         continue;
       }
 
@@ -245,6 +245,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         grade,
         year: numericYear,
         uploaderDisplayName: currentUser?.name || 'Academic Contributor',
+        onProgress: (text: string) => setUploadProgress(text),
       });
 
       if (error || !paper) {
@@ -571,7 +572,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
                   <input
                     type="file"
                     id="gallery-photo-input"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/svg+xml"
                     multiple
                     onChange={(e) => {
                       if (e.target.files) handleAddPhotoFiles(e.target.files);
