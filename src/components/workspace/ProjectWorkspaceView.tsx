@@ -17,11 +17,26 @@ import {
   Pin,
   Zap,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  UploadCloud,
+  Image as ImageIcon,
+  Cloud,
+  HardDrive
 } from 'lucide-react';
 import { Paper } from '../../types';
-import { StudyProject, QuickCaptureItem } from '../../types/workspace';
+import { StudyProject, QuickCaptureItem, ProjectNoteAttachment } from '../../types/workspace';
 import { workspaceService } from '../../services/workspaceService';
+import { formatFileSize } from '../../services/noteAttachmentStore';
+import {
+  CameraNoteScannerModal,
+  NoteAttachInitialMode,
+} from './CameraNoteScannerModal';
+import {
+  NoteAttachmentViewerModal,
+  resolveAttachmentPageBlob,
+} from './NoteAttachmentViewerModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface ProjectWorkspaceViewProps {
   project: StudyProject;
@@ -59,6 +74,8 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   const [newTaskPriority, setNewTaskPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
+  const { isAuthenticated } = useAuth();
+
   // New note form state
   const [isAddingNote, setIsAddingNote] = useState(autoOpenNoteComposer);
   const [noteTitle, setNoteTitle] = useState('');
@@ -66,6 +83,14 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   const [noteTags] = useState<string[]>([]);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+
+  // Note PDF & photo attachments state
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<NoteAttachInitialMode>('upload');
+  const [viewingAttachment, setViewingAttachment] = useState<ProjectNoteAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
 
   // New resource form state
   const [isAddingResource, setIsAddingResource] = useState(false);
@@ -173,6 +198,50 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
     refreshProject();
   };
 
+  // Note Attachment actions (PDF / Photos)
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (deletingAttachmentId) return;
+    setDeletingAttachmentId(attachmentId);
+    setAttachmentError(null);
+    const res = await workspaceService.deleteProjectNoteAttachmentAsync(
+      currentProject.id,
+      attachmentId
+    );
+    setDeletingAttachmentId(null);
+    if (!res.success) {
+      setAttachmentError(res.error?.message || 'Could not remove note attachment.');
+      return;
+    }
+    refreshProject();
+  };
+
+  const handleDownloadAttachment = async (att: ProjectNoteAttachment) => {
+    const pages = att.pages || [];
+    if (pages.length === 0 || downloadingAttachmentId) return;
+    setDownloadingAttachmentId(att.id);
+    setAttachmentError(null);
+    try {
+      for (let i = 0; i < pages.length; i += 1) {
+        const page = pages[i];
+        const res = await resolveAttachmentPageBlob(page);
+        if (!res.blob) {
+          setAttachmentError(res.error || 'Could not download note file.');
+          break;
+        }
+        const url = URL.createObjectURL(res.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = page.fileName || `${att.title}_page_${i + 1}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  };
+
   // Resource actions
   const handleAddResource = (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +293,10 @@ ${attachedPapers.map((p) => `• ${p.examBoard} ${p.grade} - ${p.title} (${p.yea
 ============================================================
 STUDY NOTES & FORMULAE:
 ${currentProject.notes.map((n) => `--- ${n.title} ---\n${n.content}\nTags: ${n.tags.join(', ')}\n`).join('\n\n')}
+
+============================================================
+ATTACHED NOTE PDFs & PHOTOS:
+${(currentProject.noteAttachments || []).map((att) => `• ${att.title} (${att.kind === 'pdf' ? 'PDF' : `${att.pages.length} photos`})`).join('\n') || 'None'}
 
 ============================================================
 RESOURCES:
@@ -547,19 +620,43 @@ Generated from Studify Student Workspace.
         </div>
       )}
 
-      {/* TAB 3: Study Notes, Quick Captures & Formulas */}
+      {/* TAB 3: Study Notes, Uploaded PDFs/Photos & Quick Captures */}
       {activeTab === 'notes' && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-[var(--text-secondary)]">
-              Your dedicated project notes, formula cheat sheets, and quick captures.
+              Your dedicated project notes, backed-up PDFs &amp; handwritten photos, and quick captures.
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAttachmentError(null);
+                  setScannerMode('camera');
+                  setScannerOpen(true);
+                }}
+                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Camera className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                <span>Take Photo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAttachmentError(null);
+                  setScannerMode('upload');
+                  setScannerOpen(true);
+                }}
+                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                <span>Upload PDF / Photos</span>
+              </button>
               {onOpenQuickCapture && (
                 <button
                   type="button"
                   onClick={() => onOpenQuickCapture(currentProject.id)}
-                  className="px-3 py-1.5 rounded-lg bg-[var(--accent-yellow-bg)] hover:opacity-90 text-[var(--color-yellow)] border border-[var(--color-yellow)]/30 text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
+                  className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--accent-yellow-bg)] hover:opacity-90 text-[var(--color-yellow)] border border-[var(--color-yellow)]/30 text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
                 >
                   <Zap className="w-3.5 h-3.5" />
                   <span>Quick Capture</span>
@@ -571,13 +668,20 @@ Generated from Studify Student Workspace.
                   setNoteError(null);
                   setIsAddingNote(!isAddingNote);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border whitespace-nowrap"
+                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>{isAddingNote ? 'Cancel' : 'New Note'}</span>
               </button>
             </div>
           </div>
+
+          {attachmentError && (
+            <div className="p-3 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{attachmentError}</span>
+            </div>
+          )}
 
           {isAddingNote && (
             <form onSubmit={handleSaveNote} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3 shadow-xs">
@@ -635,16 +739,122 @@ Generated from Studify Student Workspace.
             </form>
           )}
 
-          {currentProject.notes.length === 0 && projectCaptures.length === 0 ? (
+          {currentProject.notes.length === 0 &&
+          (currentProject.noteAttachments || []).length === 0 &&
+          projectCaptures.length === 0 ? (
             <div className="p-8 text-center bg-[var(--surface-main)]/85 border border-[var(--border-divider)] rounded-xl space-y-2.5">
               <FileText className="w-6 h-6 text-[var(--text-muted)] mx-auto" />
-              <div className="text-xs font-semibold text-[var(--text-primary)]">No notes or captures in this project yet</div>
-              <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
-                Click New Note for full study sheets or Quick Capture to save formulas and reminders instantly.
+              <div className="text-xs font-semibold text-[var(--text-primary)]">No notes, PDFs, or note photos in this project yet</div>
+              <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto">
+                Click New Note to write study sheets, Take Photo to snap handwritten pages, or Upload PDF / Photos so your notes never get lost.
               </p>
             </div>
           ) : (
             <>
+              {(currentProject.noteAttachments || []).length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] tabular-nums">
+                    Backed-Up PDFs &amp; Note Photos ({(currentProject.noteAttachments || []).length})
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(currentProject.noteAttachments || []).map((att) => {
+                      const totalSize = (att.pages || []).reduce((acc, p) => acc + (p.sizeBytes || 0), 0);
+                      const isCloudSynced = (att.pages || []).some((p) => Boolean(p.storagePath));
+                      const isPdf = att.kind === 'pdf';
+                      return (
+                        <div
+                          key={att.id}
+                          className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
+                                {isPdf ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] truncate">
+                                  {att.title}
+                                </h4>
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-muted)] tabular-nums mt-0.5">
+                                  <span>
+                                    {isPdf
+                                      ? 'PDF'
+                                      : `${att.pages.length} ${att.pages.length === 1 ? 'Photo' : 'Photos'}`}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{formatFileSize(totalSize)}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
+                                    {isCloudSynced ? (
+                                      <>
+                                        <Cloud className="w-3 h-3 text-[var(--accent-blue)]" />
+                                        <span>Saved in Cloud</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <HardDrive className="w-3 h-3" />
+                                        <span>Saved on Device</span>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAttachment(att.id)}
+                              disabled={deletingAttachmentId === att.id}
+                              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer disabled:opacity-40"
+                              title="Delete attachment"
+                              aria-label="Delete attachment"
+                            >
+                              {deletingAttachmentId === att.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="pt-2 border-t border-[var(--border-divider)] flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-[var(--text-muted)] tabular-nums">
+                              {new Date(att.createdAt).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setViewingAttachment(att)}
+                                className="px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-primary)] flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                                <span>Preview</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadAttachment(att)}
+                                disabled={downloadingAttachmentId === att.id}
+                                className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:opacity-90 text-xs font-semibold text-[var(--accent-blue)] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
+                              >
+                                {downloadingAttachmentId === att.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Download className="w-3.5 h-3.5" />
+                                )}
+                                <span>Download</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {currentProject.notes.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {currentProject.notes.map((note) => (
@@ -865,6 +1075,21 @@ Generated from Studify Student Workspace.
           </div>
         </div>
       )}
+
+      <CameraNoteScannerModal
+        isOpen={scannerOpen}
+        initialMode={scannerMode}
+        projectId={currentProject.id}
+        projectTitle={currentProject.title}
+        isGuest={!isAuthenticated}
+        onClose={() => setScannerOpen(false)}
+        onSaved={() => refreshProject()}
+      />
+
+      <NoteAttachmentViewerModal
+        attachment={viewingAttachment}
+        onClose={() => setViewingAttachment(null)}
+      />
     </div>
   );
 };

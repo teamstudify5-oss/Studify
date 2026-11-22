@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Star, MessageSquarePlus, AlertCircle, RotateCcw } from 'lucide-react';
+import {
+  Star,
+  MessageSquarePlus,
+  AlertCircle,
+  RotateCcw,
+  BadgeCheck,
+  Reply,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
 import {
   appFeedbackService,
   emptyBreakdown,
@@ -8,6 +17,7 @@ import {
   StarTier,
 } from '../services/appFeedbackService';
 import { AppFeedbackBottomSheet } from './AppFeedbackBottomSheet';
+import { useAuth } from '../context/AuthContext';
 
 const STAR_TIERS: StarTier[] = [5, 4, 3, 2, 1];
 
@@ -45,6 +55,7 @@ const PartialStarRow: React.FC<{ value: number; sizeClass?: string }> = ({
 };
 
 export const AppPerformanceFeedbackSection: React.FC = () => {
+  const { isOwner } = useAuth();
   const [summary, setSummary] = useState<FeedbackSummary>({
     averageRating: null,
     totalRatings: 0,
@@ -60,6 +71,13 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [starFilter, setStarFilter] = useState<StarTier | null>(null);
   const currentVisitorId = useMemo(() => getVisitorId(), []);
+
+  // Studify Main Account (Owner-only) inline reply state
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyDraft, setReplyDraft] = useState<string>('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState<boolean>(false);
+  const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   const loadFeedback = async () => {
     setIsLoading(true);
@@ -78,6 +96,75 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
 
   const handleFeedbackSaved = (updated: FeedbackSummary) => {
     setSummary(updated);
+  };
+
+  const handleStartReply = (reviewId: string, existingReply?: string | null) => {
+    setReplyingToId(reviewId);
+    setReplyDraft(existingReply || '');
+    setReplyError(null);
+  };
+
+  const handleCancelReply = () => {
+    if (isSubmittingReply) return;
+    setReplyingToId(null);
+    setReplyDraft('');
+    setReplyError(null);
+  };
+
+  const handleSubmitReply = async (e: React.FormEvent, feedbackId: string) => {
+    e.preventDefault();
+    if (isSubmittingReply || !isOwner) return;
+
+    const clean = replyDraft.trim();
+    if (!clean) {
+      setReplyError('Please enter a reply before posting.');
+      return;
+    }
+
+    setIsSubmittingReply(true);
+    setReplyError(null);
+
+    const res = await appFeedbackService.replyToFeedback({
+      feedbackId,
+      replyText: clean,
+    });
+
+    setIsSubmittingReply(false);
+
+    if (!res.success || !res.feedback) {
+      setReplyError(res.error?.message || 'Could not post official reply.');
+      return;
+    }
+
+    setSummary((prev) => ({
+      ...prev,
+      items: prev.items.map((it) => (it.id === res.feedback!.id ? res.feedback! : it)),
+    }));
+    setReplyingToId(null);
+    setReplyDraft('');
+  };
+
+  const handleDeleteReply = async (feedbackId: string) => {
+    if (!isOwner || deletingReplyId) return;
+    setDeletingReplyId(feedbackId);
+    setReplyError(null);
+
+    const res = await appFeedbackService.deleteFeedbackReply(feedbackId);
+    setDeletingReplyId(null);
+
+    if (!res.success) {
+      setReplyError(res.error?.message || 'Could not remove official reply.');
+      return;
+    }
+
+    setSummary((prev) => ({
+      ...prev,
+      items: prev.items.map((it) =>
+        it.id === feedbackId
+          ? { ...it, replyText: null, replyAuthor: null, replyUpdatedAt: null }
+          : it
+      ),
+    }));
   };
 
   const itemsWithComments = useMemo(
@@ -247,14 +334,24 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
             )}
           </div>
 
+          {replyError && replyingToId === null && (
+            <div className="p-3 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{replyError}</span>
+            </div>
+          )}
+
           {filteredReviews.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {filteredReviews.map((item) => {
                 const isOwnReview = item.visitorId === currentVisitorId;
+                const isReplyingHere = replyingToId === item.id;
+                const hasReply = Boolean(item.replyText && item.replyText.trim().length > 0);
+
                 return (
                   <article
                     key={item.id}
-                    className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-4 space-y-2.5"
+                    className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-4 space-y-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -296,20 +393,142 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
                         </div>
                       </div>
 
-                      {isOwnReview && (
-                        <button
-                          type="button"
-                          onClick={() => setIsBottomSheetOpen(true)}
-                          className="text-[11px] font-medium text-[var(--accent-blue)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
-                        >
-                          Edit
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        {isOwnReview && (
+                          <button
+                            type="button"
+                            onClick={() => setIsBottomSheetOpen(true)}
+                            className="text-[11px] font-medium text-[var(--accent-blue)] hover:underline cursor-pointer whitespace-nowrap"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {isOwner && !isReplyingHere && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartReply(item.id, item.replyText)}
+                            className="text-[11px] font-semibold text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                          >
+                            <Reply className="w-3 h-3" />
+                            <span>{hasReply ? 'Edit Reply' : 'Reply'}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <p className="text-xs sm:text-sm text-[var(--text-primary)] leading-relaxed break-words">
                       {item.comment}
                     </p>
+
+                    {/* Official Studify Team Reply (nested hairline sub-block) */}
+                    {hasReply && !isReplyingHere && (
+                      <div className="mt-2.5 pt-2.5 px-3 pb-3 rounded-xl bg-[var(--surface-secondary)]/75 border border-[var(--border-divider)] space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+                            <span className="font-semibold text-[var(--text-primary)] whitespace-nowrap">
+                              {item.replyAuthor || 'Studify Team'}
+                            </span>
+                            <BadgeCheck
+                              className="w-3.5 h-3.5 text-[var(--accent-blue)] shrink-0"
+                              aria-label="Verified Owner"
+                            />
+                            <span className="text-[var(--text-muted)] whitespace-nowrap">
+                              Verified Owner
+                            </span>
+                            {item.replyUpdatedAt && (
+                              <>
+                                <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
+                                <span className="text-[var(--text-muted)] tabular-nums whitespace-nowrap">
+                                  {new Date(item.replyUpdatedAt).toLocaleDateString(undefined, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })}
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          {isOwner && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteReply(item.id)}
+                              disabled={deletingReplyId === item.id}
+                              className="text-[11px] text-[var(--text-muted)] hover:text-[var(--color-red)] flex items-center gap-1 cursor-pointer disabled:opacity-40 whitespace-nowrap"
+                              aria-label="Delete official reply"
+                            >
+                              {deletingReplyId === item.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed break-words">
+                          {item.replyText}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Owner-Only Inline Reply Composer */}
+                    {isOwner && isReplyingHere && (
+                      <form
+                        onSubmit={(e) => handleSubmitReply(e, item.id)}
+                        className="mt-2.5 p-3 rounded-xl bg-[var(--surface-secondary)]/85 border border-[var(--border-divider)] space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+                            <BadgeCheck className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                            <span>Replying as Studify Team</span>
+                          </span>
+                          <span className="text-[var(--text-muted)] tabular-nums">
+                            {replyDraft.length}/500
+                          </span>
+                        </div>
+
+                        {replyError && (
+                          <div className="p-2 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[11px] text-[var(--color-red)] flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{replyError}</span>
+                          </div>
+                        )}
+
+                        <textarea
+                          rows={3}
+                          value={replyDraft}
+                          onChange={(e) => setReplyDraft(e.target.value.slice(0, 500))}
+                          disabled={isSubmittingReply}
+                          placeholder="Write an official response from Studify Team..."
+                          className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
+                        />
+
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelReply}
+                            disabled={isSubmittingReply}
+                            className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-main)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer whitespace-nowrap disabled:opacity-40"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSubmittingReply || !replyDraft.trim()}
+                            className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-40"
+                          >
+                            {isSubmittingReply ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Posting...</span>
+                              </>
+                            ) : (
+                              <span>{hasReply ? 'Update Reply' : 'Post Reply'}</span>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </article>
                 );
               })}

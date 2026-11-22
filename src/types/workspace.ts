@@ -20,6 +20,26 @@ export interface ProjectNote {
   isPinned?: boolean;
 }
 
+export interface ProjectNoteAttachmentPage {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageBucket?: string;
+  storagePath?: string;
+  localBlobKey?: string;
+}
+
+export interface ProjectNoteAttachment {
+  id: string;
+  projectId: string;
+  title: string;
+  kind: 'pdf' | 'photo-set';
+  pages: ProjectNoteAttachmentPage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProjectResource {
   id: string;
   title: string;
@@ -44,6 +64,7 @@ export interface StudyProject {
   paperIds: string[]; // IDs of attached Studify PYQs
   tasks: ProjectTask[];
   notes: ProjectNote[];
+  noteAttachments?: ProjectNoteAttachment[];
   resources: ProjectResource[];
 }
 

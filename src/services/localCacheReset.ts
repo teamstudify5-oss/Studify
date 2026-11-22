@@ -64,7 +64,11 @@ export async function clearStudifyIndexedDbAndCaches(): Promise<void> {
           const name = dbInfo?.name;
           if (!name) return Promise.resolve();
           const lower = name.toLowerCase();
-          if (lower.includes('supabase') || lower.includes('gotrue')) {
+          if (
+            lower.includes('supabase') ||
+            lower.includes('gotrue') ||
+            name === 'studify_guest_note_files_v1'
+          ) {
             return Promise.resolve();
           }
           return new Promise<void>((resolve) => {

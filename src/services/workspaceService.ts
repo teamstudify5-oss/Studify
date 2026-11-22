@@ -4,9 +4,17 @@ import {
   WorkspaceSession,
   ProjectTask,
   ProjectNote,
+  ProjectNoteAttachment,
+  ProjectNoteAttachmentPage,
   ProjectResource,
 } from '../types/workspace';
 import { supabaseDb } from './supabaseDb';
+import { APP_BUCKET, supabaseStorage } from './supabaseStorage';
+import {
+  noteAttachmentStore,
+  optimizeNoteImageBlob,
+  validateNoteFileCandidate,
+} from './noteAttachmentStore';
 
 const PROJECTS_STORAGE_KEY = 'studify_workspace_projects_clean_v3';
 const QUICK_CAPTURES_KEY = 'studify_quick_captures_clean_v3';
@@ -53,9 +61,46 @@ export interface WorkspaceDbAdapter {
   deleteQuickCapture: typeof supabaseDb.deleteQuickCapture;
   createNoteWithStatus: typeof supabaseDb.createNoteWithStatus;
   deleteNote: typeof supabaseDb.deleteNote;
+  getCurrentUserId?: () => Promise<string | null>;
+  uploadNotePageFile?: (params: {
+    userId: string;
+    projectId: string;
+    attachmentId: string;
+    file: Blob;
+    fileName: string;
+    contentType: string;
+  }) => Promise<{ path: string | null; bucket: string; error: Error | null }>;
+  deleteNotePageFile?: (path: string, bucket?: string) => Promise<boolean>;
 }
 
+const defaultNoteStorageHelpers = {
+  getCurrentUserId: () => supabaseDb.getCurrentUserId(),
+  uploadNotePageFile: async (params: {
+    userId: string;
+    projectId: string;
+    attachmentId: string;
+    file: Blob;
+    fileName: string;
+    contentType: string;
+  }) => {
+    const res = await supabaseStorage.uploadAppFile({
+      userId: params.userId,
+      featureName: 'project-notes',
+      itemId: `${params.projectId}_${params.attachmentId}`,
+      file: params.file,
+      fileName: params.fileName,
+      contentType: params.contentType,
+    });
+    return { path: res.path, bucket: APP_BUCKET, error: res.error };
+  },
+  deleteNotePageFile: (path: string, bucket: string = APP_BUCKET) =>
+    supabaseStorage.deleteAppFile(path, bucket),
+};
+
 export function createWorkspaceService(db: WorkspaceDbAdapter = supabaseDb) {
+  const getCurrentUserId = db.getCurrentUserId || defaultNoteStorageHelpers.getCurrentUserId;
+  const uploadNotePageFile = db.uploadNotePageFile || defaultNoteStorageHelpers.uploadNotePageFile;
+  const deleteNotePageFile = db.deleteNotePageFile || defaultNoteStorageHelpers.deleteNotePageFile;
   let storageScope: WorkspaceStorageScope = 'user';
 
   const getKeys = (scope: WorkspaceStorageScope = storageScope) =>
@@ -72,14 +117,14 @@ export function createWorkspaceService(db: WorkspaceDbAdapter = supabaseDb) {
         };
 
   const readJsonArray = <T>(key: string, fallback: T[]): T[] => {
-    if (typeof localStorage === 'undefined') return fallback;
+    if (typeof localStorage === 'undefined') return [...fallback];
     try {
       const stored = localStorage.getItem(key);
-      if (!stored) return fallback;
+      if (!stored) return [...fallback];
       const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed : fallback;
+      return Array.isArray(parsed) ? parsed : [...fallback];
     } catch {
-      return fallback;
+      return [...fallback];
     }
   };
 
@@ -160,10 +205,58 @@ export function createWorkspaceService(db: WorkspaceDbAdapter = supabaseDb) {
 
       let migratedProjects = 0;
       const remainingProjects: StudyProject[] = [];
+      const currentUid = await getCurrentUserId();
+
       for (const proj of guestProjects) {
-        const res = await db.createProjectWithStatus(proj);
+        const migratedLocalKeys: string[] = [];
+        let projectToCreate: StudyProject = { ...proj };
+
+        if (currentUid && Array.isArray(proj.noteAttachments) && proj.noteAttachments.length > 0) {
+          const uploadedAttachments: ProjectNoteAttachment[] = [];
+          for (const att of proj.noteAttachments) {
+            const nextPages: ProjectNoteAttachmentPage[] = [];
+            for (const page of att.pages || []) {
+              if (page.localBlobKey && !page.storagePath) {
+                const localBlob = await noteAttachmentStore.getLocalBlob(page.localBlobKey);
+                if (localBlob) {
+                  const uploadRes = await uploadNotePageFile({
+                    userId: currentUid,
+                    projectId: proj.id,
+                    attachmentId: att.id,
+                    file: localBlob,
+                    fileName: page.fileName,
+                    contentType: page.mimeType,
+                  });
+                  if (uploadRes.path && !uploadRes.error) {
+                    migratedLocalKeys.push(page.localBlobKey);
+                    nextPages.push({
+                      id: page.id,
+                      fileName: page.fileName,
+                      mimeType: page.mimeType,
+                      sizeBytes: page.sizeBytes,
+                      storageBucket: uploadRes.bucket || APP_BUCKET,
+                      storagePath: uploadRes.path,
+                    });
+                    continue;
+                  }
+                }
+              }
+              nextPages.push(page);
+            }
+            uploadedAttachments.push({ ...att, pages: nextPages });
+          }
+          projectToCreate = {
+            ...proj,
+            noteAttachments: uploadedAttachments,
+          };
+        }
+
+        const res = await db.createProjectWithStatus(projectToCreate);
         if (res.project && !res.error) {
           migratedProjects += 1;
+          for (const key of migratedLocalKeys) {
+            await noteAttachmentStore.deleteLocalBlob(key).catch(() => undefined);
+          }
           for (const note of proj.notes || []) {
             await db.createNoteWithStatus({
               id: note.id,
@@ -275,6 +368,7 @@ export function createWorkspaceService(db: WorkspaceDbAdapter = supabaseDb) {
         paperIds: data.paperIds || [],
         tasks: [],
         notes: [],
+        noteAttachments: [],
         resources: [],
         status: data.status || 'active',
       };
@@ -326,9 +420,23 @@ export function createWorkspaceService(db: WorkspaceDbAdapter = supabaseDb) {
 
     deleteProject(id: string): boolean {
       const projects = this.getProjects();
+      const target = projects.find((p) => p.id === id);
       const filtered = projects.filter((p) => p.id !== id);
       if (filtered.length === projects.length) return false;
       this.saveProjects(filtered);
+
+      if (target && Array.isArray(target.noteAttachments)) {
+        for (const att of target.noteAttachments) {
+          for (const page of att.pages || []) {
+            if (page.localBlobKey) {
+              void noteAttachmentStore.deleteLocalBlob(page.localBlobKey).catch(() => undefined);
+            }
+            if (storageScope === 'user' && page.storagePath) {
+              void deleteNotePageFile(page.storagePath, page.storageBucket || APP_BUCKET).catch(() => undefined);
+            }
+          }
+        }
+      }
 
       if (storageScope === 'user') {
         db.deleteProject(id).catch((e) => console.warn('Supabase deleteProject failed', e));
@@ -658,6 +766,261 @@ export function createWorkspaceService(db: WorkspaceDbAdapter = supabaseDb) {
       dispatchNotesUpdated();
       dispatchWorkspaceUpdated();
       return true;
+    },
+
+    // Project Note PDF & Photo Attachments (Cloud Storage signed in, IndexedDB signed out)
+    async addProjectNoteAttachmentAsync(
+      projectId: string,
+      params: {
+        title?: string;
+        files: Array<{ blob: Blob; fileName: string; mimeType?: string }>;
+      }
+    ): Promise<{ attachment: ProjectNoteAttachment | null; error: Error | null }> {
+      const project = this.getProjectById(projectId);
+      if (!project) {
+        return { attachment: null, error: new Error('Study project not found.') };
+      }
+
+      const rawFiles = Array.isArray(params.files) ? params.files : [];
+      if (rawFiles.length === 0) {
+        return { attachment: null, error: new Error('Please choose a PDF or capture at least one photo.') };
+      }
+
+      const validatedKinds: Array<'pdf' | 'image'> = [];
+      for (const f of rawFiles) {
+        const check = validateNoteFileCandidate({
+          name: f.fileName,
+          type: f.mimeType || f.blob.type,
+          size: f.blob.size,
+        });
+        if (!check.valid) {
+          return { attachment: null, error: new Error(check.error || 'Unsupported attachment file.') };
+        }
+        validatedKinds.push(check.kind);
+      }
+
+      const hasPdf = validatedKinds.includes('pdf');
+      if (hasPdf && rawFiles.length > 1) {
+        return {
+          attachment: null,
+          error: new Error('Upload one PDF file at a time, or bundle multiple note photos together.'),
+        };
+      }
+      if (!hasPdf && rawFiles.length > 12) {
+        return {
+          attachment: null,
+          error: new Error('Maximum 12 photos per note bundle.'),
+        };
+      }
+
+      const attachmentId = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const now = new Date().toISOString();
+      const defaultTitle = hasPdf
+        ? rawFiles[0].fileName.replace(/\.pdf$/i, '').trim() || 'Study Note PDF'
+        : `Handwritten Notes (${rawFiles.length} ${rawFiles.length === 1 ? 'page' : 'pages'})`;
+      const cleanTitle = params.title?.trim() || defaultTitle;
+      const kind: 'pdf' | 'photo-set' = hasPdf ? 'pdf' : 'photo-set';
+
+      const preparedFiles: Array<{ blob: Blob; fileName: string; mimeType: string }> = [];
+      for (let idx = 0; idx < rawFiles.length; idx += 1) {
+        const item = rawFiles[idx];
+        const fallbackName = hasPdf
+          ? item.fileName || 'study_notes.pdf'
+          : item.fileName || `note_page_${idx + 1}.jpg`;
+        if (hasPdf) {
+          preparedFiles.push({
+            blob: item.blob,
+            fileName: fallbackName,
+            mimeType: 'application/pdf',
+          });
+        } else {
+          const optimized = await optimizeNoteImageBlob(item.blob, fallbackName);
+          preparedFiles.push(optimized);
+        }
+      }
+
+      const existingAttachments = Array.isArray(project.noteAttachments) ? project.noteAttachments : [];
+
+      if (storageScope === 'guest') {
+        const savedKeys: string[] = [];
+        try {
+          const pages: ProjectNoteAttachmentPage[] = [];
+          for (let idx = 0; idx < preparedFiles.length; idx += 1) {
+            const pf = preparedFiles[idx];
+            const pageId = `pg-${idx + 1}-${Math.random().toString(36).slice(2, 6)}`;
+            const localBlobKey = `guest_att_${projectId}_${attachmentId}_${pageId}`;
+            await noteAttachmentStore.saveLocalBlob(localBlobKey, pf.blob, {
+              fileName: pf.fileName,
+              mimeType: pf.mimeType,
+            });
+            savedKeys.push(localBlobKey);
+            pages.push({
+              id: pageId,
+              fileName: pf.fileName,
+              mimeType: pf.mimeType,
+              sizeBytes: pf.blob.size,
+              localBlobKey,
+            });
+          }
+
+          const attachment: ProjectNoteAttachment = {
+            id: attachmentId,
+            projectId,
+            title: cleanTitle,
+            kind,
+            pages,
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          const nextAttachments = [attachment, ...existingAttachments];
+          this.updateProject(projectId, { noteAttachments: nextAttachments });
+          dispatchNotesUpdated();
+          dispatchWorkspaceUpdated();
+          return { attachment, error: null };
+        } catch (err: any) {
+          for (const k of savedKeys) {
+            await noteAttachmentStore.deleteLocalBlob(k).catch(() => undefined);
+          }
+          return {
+            attachment: null,
+            error: err instanceof Error ? err : new Error('Failed to save note file to device storage.'),
+          };
+        }
+      }
+
+      // Signed-in mode: upload to private 'app-files' bucket then persist project metadata in Supabase DB
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        return {
+          attachment: null,
+          error: new Error('Sign in session expired. Please sign in again to upload to cloud.'),
+        };
+      }
+
+      const uploadedPages: ProjectNoteAttachmentPage[] = [];
+      for (let idx = 0; idx < preparedFiles.length; idx += 1) {
+        const pf = preparedFiles[idx];
+        const pageId = `pg-${idx + 1}-${Math.random().toString(36).slice(2, 6)}`;
+        const uploadRes = await uploadNotePageFile({
+          userId,
+          projectId,
+          attachmentId,
+          file: pf.blob,
+          fileName: pf.fileName,
+          contentType: pf.mimeType,
+        });
+
+        if (uploadRes.error || !uploadRes.path) {
+          for (const prev of uploadedPages) {
+            if (prev.storagePath) {
+              await deleteNotePageFile(prev.storagePath, prev.storageBucket || APP_BUCKET).catch(() => undefined);
+            }
+          }
+          return {
+            attachment: null,
+            error: uploadRes.error || new Error('Failed to upload note file to private cloud storage.'),
+          };
+        }
+
+        uploadedPages.push({
+          id: pageId,
+          fileName: pf.fileName,
+          mimeType: pf.mimeType,
+          sizeBytes: pf.blob.size,
+          storageBucket: uploadRes.bucket || APP_BUCKET,
+          storagePath: uploadRes.path,
+        });
+      }
+
+      const attachment: ProjectNoteAttachment = {
+        id: attachmentId,
+        projectId,
+        title: cleanTitle,
+        kind,
+        pages: uploadedPages,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const nextAttachments = [attachment, ...existingAttachments];
+
+      const projRes = await db.updateProjectWithStatus(projectId, { noteAttachments: nextAttachments });
+      if (!projRes.success) {
+        for (const p of uploadedPages) {
+          if (p.storagePath) {
+            await deleteNotePageFile(p.storagePath, p.storageBucket || APP_BUCKET).catch(() => undefined);
+          }
+        }
+        return {
+          attachment: null,
+          error: projRes.error || new Error('Could not link uploaded note files to your cloud project.'),
+        };
+      }
+
+      const projects = this.getProjects().map((p) =>
+        p.id === projectId ? { ...p, noteAttachments: nextAttachments, updatedAt: now } : p
+      );
+      this.saveProjects(projects);
+      dispatchNotesUpdated();
+      dispatchWorkspaceUpdated();
+      return { attachment, error: null };
+    },
+
+    async deleteProjectNoteAttachmentAsync(
+      projectId: string,
+      attachmentId: string
+    ): Promise<{ success: boolean; error: Error | null }> {
+      const project = this.getProjectById(projectId);
+      if (!project) {
+        return { success: false, error: new Error('Project not found.') };
+      }
+
+      const existing = Array.isArray(project.noteAttachments) ? project.noteAttachments : [];
+      const target = existing.find((a) => a.id === attachmentId);
+      if (!target) {
+        return { success: false, error: new Error('Attachment not found.') };
+      }
+
+      const nextAttachments = existing.filter((a) => a.id !== attachmentId);
+
+      if (storageScope === 'user') {
+        for (const page of target.pages || []) {
+          if (page.storagePath) {
+            const removed = await deleteNotePageFile(page.storagePath, page.storageBucket || APP_BUCKET);
+            if (!removed) {
+              return {
+                success: false,
+                error: new Error('Could not delete file from cloud storage. Please try again.'),
+              };
+            }
+          }
+        }
+
+        const updateRes = await db.updateProjectWithStatus(projectId, {
+          noteAttachments: nextAttachments,
+        });
+        if (!updateRes.success) {
+          return {
+            success: false,
+            error: updateRes.error || new Error('Could not update project note attachments.'),
+          };
+        }
+      }
+
+      for (const page of target.pages || []) {
+        if (page.localBlobKey) {
+          await noteAttachmentStore.deleteLocalBlob(page.localBlobKey).catch(() => undefined);
+        }
+      }
+
+      const now = new Date().toISOString();
+      const projects = this.getProjects().map((p) =>
+        p.id === projectId ? { ...p, noteAttachments: nextAttachments, updatedAt: now } : p
+      );
+      this.saveProjects(projects);
+      dispatchNotesUpdated();
+      dispatchWorkspaceUpdated();
+      return { success: true, error: null };
     },
 
     // Project Resources

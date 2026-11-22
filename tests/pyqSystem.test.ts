@@ -18,6 +18,7 @@ import {
   computeFeedbackBreakdown,
 } from '../src/services/appFeedbackService';
 import { syncAccountCacheIsolation } from '../src/context/AuthContext';
+import { noteAttachmentStore } from '../src/services/noteAttachmentStore';
 
 // Lightweight in-memory localStorage mock for Node test runner isolation
 const mockStore = new Map<string, string>();
@@ -49,6 +50,7 @@ beforeEach(() => {
   mockStore.clear();
   storageService.clearInMemoryState();
   workspaceService.setStorageScope('user');
+  noteAttachmentStore.clearInMemoryBlobsForTest();
 });
 
 interface MockSupabaseOptions {
@@ -1681,4 +1683,263 @@ test('Scenario 22: Workspace & App Feedback SQL migration aligns schema and hard
   assert.match(executableSql, /SET search_path = ''/);
   assert.match(executableSql, /GRANT EXECUTE ON FUNCTION public\.submit_app_feedback\(text, integer, text, text\) TO anon, authenticated, service_role;/);
   assert.match(executableSql, /GRANT EXECUTE ON FUNCTION public\.get_app_feedback_summary\(text, integer\) TO anon, authenticated, service_role;/);
+});
+
+test('Scenario 23: Studify Team official replies enforce owner authorization, sanitize content, and sync cleanly', async () => {
+  const rows: any[] = [
+    {
+      id: 'fb_rev_1',
+      visitor_id: 'student-visitor-1',
+      author_name: 'Karan',
+      rating: 5,
+      comment: 'Helpful CBSE physics collection!',
+      created_at: '2026-11-21T10:00:00Z',
+      updated_at: '2026-11-21T10:00:00Z',
+      reply_text: null,
+      reply_author: null,
+      reply_updated_at: null,
+    },
+  ];
+  let callerIsOwner = false;
+
+  const client: any = {
+    rpc: async (fnName: string, args: any) => {
+      if (fnName === 'reply_to_app_feedback') {
+        if (!callerIsOwner) {
+          return {
+            data: null,
+            error: {
+              code: '42501',
+              message: 'Only the verified Studify main account can reply to reviews.',
+            },
+          };
+        }
+        const target = rows.find((r) => r.id === args.p_feedback_id);
+        if (!target) {
+          return { data: null, error: { code: 'P0002', message: 'Review not found.' } };
+        }
+        target.reply_text = args.p_reply_text;
+        target.reply_author = 'Studify Team';
+        target.reply_updated_at = '2026-11-21T12:00:00Z';
+        return { data: { success: true, item: { ...target } }, error: null };
+      }
+
+      if (fnName === 'delete_app_feedback_reply') {
+        if (!callerIsOwner) {
+          return {
+            data: null,
+            error: {
+              code: '42501',
+              message: 'Only the verified Studify main account can delete official replies.',
+            },
+          };
+        }
+        const target = rows.find((r) => r.id === args.p_feedback_id);
+        if (!target) {
+          return { data: null, error: { code: 'P0002', message: 'Review not found.' } };
+        }
+        target.reply_text = null;
+        target.reply_author = null;
+        target.reply_updated_at = null;
+        return { data: { success: true, item: { ...target } }, error: null };
+      }
+
+      if (fnName === 'get_app_feedback_summary') {
+        return {
+          data: {
+            average_rating: 5,
+            total_ratings: rows.length,
+            total_reviews: rows.length,
+            rating_breakdown: { '5': rows.length, '4': 0, '3': 0, '2': 0, '1': 0 },
+            user_feedback: null,
+            items: rows.map((r) => ({ ...r })),
+          },
+          error: null,
+        };
+      }
+
+      return { data: null, error: { code: '42883', message: 'missing function' } };
+    },
+  };
+
+  const svc = createAppFeedbackService(client);
+
+  // Non-owner must be rejected by server RPC
+  const blocked = await svc.replyToFeedback({
+    feedbackId: 'fb_rev_1',
+    replyText: 'Unauthorized attempt',
+  });
+  assert.equal(blocked.success, false);
+  assert.match(String(blocked.error?.message || ''), /Only the verified Studify main account/i);
+
+  // Owner reply succeeds, strips unsafe brackets, and appears in summary
+  callerIsOwner = true;
+  const posted = await svc.replyToFeedback({
+    feedbackId: 'fb_rev_1',
+    replyText: 'Thanks <Karan>! More Class 12 papers coming soon.',
+  });
+  assert.equal(posted.success, true);
+  assert.equal(posted.feedback?.replyAuthor, 'Studify Team');
+  assert.equal(posted.feedback?.replyText, 'Thanks Karan! More Class 12 papers coming soon.');
+
+  const summary = await svc.getFeedbackSummary('other-visitor');
+  assert.equal(summary.items[0]?.replyText, 'Thanks Karan! More Class 12 papers coming soon.');
+  assert.equal(summary.items[0]?.replyAuthor, 'Studify Team');
+
+  // Owner can delete official reply
+  const removed = await svc.deleteFeedbackReply('fb_rev_1');
+  assert.equal(removed.success, true);
+  assert.equal(removed.feedback?.replyText, null);
+});
+
+test('Scenario 24: Workspace PDF & camera photo note attachments save offline for guests, migrate on login, and roll back safely on cloud error', async () => {
+  const uploadedFiles = new Map<string, Blob>();
+  const deletedPaths: string[] = [];
+  const dbProjects: any[] = [];
+  let failUploadOnSecondFile = false;
+  let failDbProjectUpdate = false;
+
+  const mockDb: any = {
+    getCurrentUserId: async () => 'owner-uid-1',
+    uploadNotePageFile: async (params: any) => {
+      if (failUploadOnSecondFile && params.fileName === 'p2.jpg') {
+        return { path: null, bucket: 'app-files', error: new Error('Storage upload aborted') };
+      }
+      const p = `${params.userId}/project-notes/${params.projectId}_${params.attachmentId}/${params.fileName}`;
+      uploadedFiles.set(p, params.file);
+      return { path: p, bucket: 'app-files', error: null };
+    },
+    deleteNotePageFile: async (p: string) => {
+      deletedPaths.push(p);
+      uploadedFiles.delete(p);
+      return true;
+    },
+    loadProjectsWithStatus: async () => ({ projects: [...dbProjects], synced: true }),
+    loadQuickCapturesWithStatus: async () => ({ captures: [], synced: true }),
+    createProjectWithStatus: async (project: any) => {
+      dbProjects.push(project);
+      return { project, error: null };
+    },
+    updateProjectWithStatus: async (id: string, updates: any) => {
+      if (failDbProjectUpdate) {
+        return { success: false, error: new Error('study_projects update failed') };
+      }
+      const idx = dbProjects.findIndex((p) => p.id === id);
+      if (idx !== -1) {
+        dbProjects[idx] = { ...dbProjects[idx], ...updates };
+      }
+      return { success: true, error: null };
+    },
+    updateProject: async () => true,
+    deleteProject: async () => true,
+    createQuickCaptureWithStatus: async (item: any) => ({ item, error: null }),
+    updateQuickCapture: async () => true,
+    deleteQuickCapture: async () => true,
+    createNoteWithStatus: async () => ({ success: true, error: null }),
+    deleteNote: async () => true,
+  };
+
+  const ws = createWorkspaceService(mockDb);
+
+  // 24A: Guest mode saves handwritten note photos + PDF to local store
+  ws.setStorageScope('guest');
+  const guestProj = (await ws.createProjectAsync({ title: 'Chemistry Organic', color: 'cyan' })).project!;
+
+  const badRes = await ws.addProjectNoteAttachmentAsync(guestProj.id, {
+    title: 'Bad EXE',
+    files: [{ blob: new Blob(['bin'], { type: 'application/x-msdownload' }), fileName: 'virus.exe' }],
+  });
+  assert.equal(badRes.attachment, null);
+  assert.match(String(badRes.error?.message || ''), /Unsupported file format/i);
+
+  const guestPdfRes = await ws.addProjectNoteAttachmentAsync(guestProj.id, {
+    title: 'Hydrocarbons Short Notes',
+    files: [
+      {
+        blob: new Blob(['%PDF-1.4 sample notes'], { type: 'application/pdf' }),
+        fileName: 'hydrocarbons.pdf',
+        mimeType: 'application/pdf',
+      },
+    ],
+  });
+  assert.equal(guestPdfRes.error, null);
+  assert.equal(guestPdfRes.attachment?.kind, 'pdf');
+  const localKey = guestPdfRes.attachment!.pages[0].localBlobKey!;
+  assert.ok(localKey);
+  assert.ok(await noteAttachmentStore.getLocalBlob(localKey));
+  assert.equal(uploadedFiles.size, 0);
+
+  // 24B: Signing in migrates guest PDF from IndexedDB to private 'app-files' storage & clears local blob
+  ws.setStorageScope('user');
+  const mig = await ws.syncGuestItemsToSupabaseIfAny();
+  assert.equal(mig.migratedProjects, 1);
+  assert.equal(uploadedFiles.size, 1);
+  assert.equal(await noteAttachmentStore.getLocalBlob(localKey), null);
+  assert.ok(dbProjects[0].noteAttachments[0].pages[0].storagePath);
+
+  // 24C: Signed-in multi-photo rollback cleans up uploaded page #1 if page #2 fails
+  const userProj = (await ws.createProjectAsync({ title: 'Physics Derivations', color: 'cyan' })).project!;
+  failUploadOnSecondFile = true;
+  const partialFail = await ws.addProjectNoteAttachmentAsync(userProj.id, {
+    title: 'Board Photos',
+    files: [
+      { blob: new Blob(['img1'], { type: 'image/jpeg' }), fileName: 'p1.jpg', mimeType: 'image/jpeg' },
+      { blob: new Blob(['img2'], { type: 'image/jpeg' }), fileName: 'p2.jpg', mimeType: 'image/jpeg' },
+    ],
+  });
+  assert.equal(partialFail.attachment, null);
+  assert.equal(uploadedFiles.size, 1); // Only the earlier migrated PDF remains; partial p1 rolled back!
+  assert.equal(deletedPaths.length, 1);
+  failUploadOnSecondFile = false;
+
+  // 24D: DB metadata failure rolls back uploaded cloud Storage file cleanly
+  failDbProjectUpdate = true;
+  const dbFailRes = await ws.addProjectNoteAttachmentAsync(userProj.id, {
+    title: 'Rollback On DB Error',
+    files: [{ blob: new Blob(['img3'], { type: 'image/jpeg' }), fileName: 'p3.jpg', mimeType: 'image/jpeg' }],
+  });
+  assert.equal(dbFailRes.attachment, null);
+  assert.match(String(dbFailRes.error?.message || ''), /study_projects update failed/i);
+  assert.equal(uploadedFiles.size, 1);
+  assert.equal(deletedPaths.length, 2);
+  failDbProjectUpdate = false;
+
+  // 24E: Successful multi-photo cloud backup & clean deletion removes Storage objects
+  const photoRes = await ws.addProjectNoteAttachmentAsync(userProj.id, {
+    title: 'Electrostatics Pages',
+    files: [
+      { blob: new Blob(['img1'], { type: 'image/jpeg' }), fileName: 'page1.jpg', mimeType: 'image/jpeg' },
+      { blob: new Blob(['img2'], { type: 'image/jpeg' }), fileName: 'page2.jpg', mimeType: 'image/jpeg' },
+    ],
+  });
+  assert.equal(photoRes.error, null);
+  assert.equal(photoRes.attachment?.kind, 'photo-set');
+  assert.equal(photoRes.attachment?.pages.length, 2);
+  assert.equal(uploadedFiles.size, 3);
+
+  const delRes = await ws.deleteProjectNoteAttachmentAsync(userProj.id, photoRes.attachment!.id);
+  assert.equal(delRes.success, true);
+  assert.equal(uploadedFiles.size, 1);
+});
+
+test('Scenario 25: 20261122 SQL migration enforces owner-only reply RPCs and private app-files bucket policies', () => {
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const migrationPath = path.resolve(
+    thisDir,
+    '../supabase/migrations/20261122_app_feedback_replies_and_workspace_note_files.sql'
+  );
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+  const executableSql = sql
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n');
+
+  assert.equal(/\bcurrent_user\b/i.test(executableSql), false, 'Migration must not execute current_user checks');
+  assert.match(executableSql, /CREATE OR REPLACE FUNCTION public\.is_studify_owner/);
+  assert.match(executableSql, /CREATE OR REPLACE FUNCTION public\.reply_to_app_feedback/);
+  assert.match(executableSql, /CREATE OR REPLACE FUNCTION public\.delete_app_feedback_reply/);
+  assert.match(executableSql, /REVOKE ALL ON FUNCTION public\.reply_to_app_feedback\(text, text\) FROM PUBLIC, anon;/);
+  assert.match(executableSql, /ALTER TABLE public\.study_projects ADD COLUMN IF NOT EXISTS note_attachments jsonb DEFAULT '\[\]'::jsonb;/);
+  assert.match(executableSql, /'app-files'/);
+  assert.match(executableSql, /CREATE POLICY "App Files Owner Insert"/);
 });

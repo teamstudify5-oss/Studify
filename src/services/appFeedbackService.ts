@@ -10,6 +10,9 @@ export interface AppFeedback {
   comment: string;
   createdAt: string;
   updatedAt: string;
+  replyText?: string | null;
+  replyAuthor?: string | null;
+  replyUpdatedAt?: string | null;
 }
 
 export interface FeedbackSummary {
@@ -87,7 +90,19 @@ function isMissingRpcError(error: any): boolean {
   );
 }
 
+export function sanitizeReply(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/[<>]/g, '')
+    .trim()
+    .slice(0, 500);
+}
+
 function mapRawItem(row: any): AppFeedback {
+  const replyText =
+    typeof row.reply_text === 'string' && row.reply_text.trim().length > 0
+      ? row.reply_text.trim()
+      : null;
   return {
     id: String(row.id),
     visitorId: String(row.visitor_id || ''),
@@ -96,6 +111,11 @@ function mapRawItem(row: any): AppFeedback {
     comment: typeof row.comment === 'string' ? row.comment : '',
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+    replyText,
+    replyAuthor: replyText
+      ? (typeof row.reply_author === 'string' && row.reply_author.trim()) || 'Studify Team'
+      : null,
+    replyUpdatedAt: replyText ? row.reply_updated_at || row.updated_at || null : null,
   };
 }
 
@@ -336,6 +356,112 @@ export function createAppFeedbackService(client: any = supabase) {
         comment: commentText,
         authorName,
       });
+    },
+
+    /**
+     * Post or update an official Studify Team reply on a public app review.
+     * Strictly enforced server-side to the verified Studify main owner account.
+     */
+    async replyToFeedback(params: {
+      feedbackId: string;
+      replyText: string;
+    }): Promise<{ success: boolean; feedback: AppFeedback | null; error: Error | null }> {
+      const cleanId = (params.feedbackId || '').trim();
+      const cleanReply = sanitizeReply(params.replyText || '');
+
+      if (!cleanId) {
+        return {
+          success: false,
+          feedback: null,
+          error: new Error('Missing review identifier.'),
+        };
+      }
+      if (!cleanReply) {
+        return {
+          success: false,
+          feedback: null,
+          error: new Error('Reply text cannot be empty.'),
+        };
+      }
+
+      try {
+        const rpcRes = await client.rpc('reply_to_app_feedback', {
+          p_feedback_id: cleanId,
+          p_reply_text: cleanReply,
+        });
+
+        if (rpcRes.error) {
+          return {
+            success: false,
+            feedback: null,
+            error: new Error(
+              isMissingRpcError(rpcRes.error)
+                ? 'Database migration required to save Studify Team replies.'
+                : rpcRes.error.message || 'Could not post official reply.'
+            ),
+          };
+        }
+
+        const savedItem = rpcRes.data?.item ? mapRawItem(rpcRes.data.item) : null;
+        if (!savedItem) {
+          return {
+            success: false,
+            feedback: null,
+            error: new Error('Official reply was not confirmed by server.'),
+          };
+        }
+
+        return { success: true, feedback: savedItem, error: null };
+      } catch (err: any) {
+        return {
+          success: false,
+          feedback: null,
+          error: err instanceof Error ? err : new Error(String(err)),
+        };
+      }
+    },
+
+    /**
+     * Delete an official Studify Team reply from a public app review (owner-only).
+     */
+    async deleteFeedbackReply(
+      feedbackId: string
+    ): Promise<{ success: boolean; feedback: AppFeedback | null; error: Error | null }> {
+      const cleanId = (feedbackId || '').trim();
+      if (!cleanId) {
+        return {
+          success: false,
+          feedback: null,
+          error: new Error('Missing review identifier.'),
+        };
+      }
+
+      try {
+        const rpcRes = await client.rpc('delete_app_feedback_reply', {
+          p_feedback_id: cleanId,
+        });
+
+        if (rpcRes.error) {
+          return {
+            success: false,
+            feedback: null,
+            error: new Error(
+              isMissingRpcError(rpcRes.error)
+                ? 'Database migration required to manage Studify Team replies.'
+                : rpcRes.error.message || 'Could not delete official reply.'
+            ),
+          };
+        }
+
+        const savedItem = rpcRes.data?.item ? mapRawItem(rpcRes.data.item) : null;
+        return { success: true, feedback: savedItem, error: null };
+      } catch (err: any) {
+        return {
+          success: false,
+          feedback: null,
+          error: err instanceof Error ? err : new Error(String(err)),
+        };
+      }
     },
   };
 }

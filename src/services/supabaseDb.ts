@@ -78,6 +78,7 @@ export const supabaseDb = {
       paperIds: row.paper_ids || [],
       tasks: row.tasks || [],
       notes: row.notes || [],
+      noteAttachments: row.note_attachments || [],
       resources: row.resources || [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -89,6 +90,15 @@ export const supabaseDb = {
   async loadProjects(): Promise<StudyProject[]> {
     const res = await this.loadProjectsWithStatus();
     return res.projects;
+  },
+
+  async getCurrentUserId(): Promise<string | null> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user?.id || null;
+    } catch {
+      return null;
+    }
   },
 
   /**
@@ -103,7 +113,7 @@ export const supabaseDb = {
       };
     }
 
-    const row = {
+    const row: Record<string, any> = {
       id: project.id,
       user_id: user.id,
       title: project.title,
@@ -118,16 +128,32 @@ export const supabaseDb = {
       paper_ids: project.paperIds || [],
       tasks: project.tasks || [],
       notes: project.notes || [],
+      note_attachments: project.noteAttachments || [],
       resources: project.resources || [],
       created_at: project.createdAt || new Date().toISOString(),
       updated_at: project.updatedAt || new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('study_projects')
       .insert([row])
       .select()
       .single();
+
+    if (
+      error &&
+      /note_attachments/i.test(error.message || '') &&
+      (!project.noteAttachments || project.noteAttachments.length === 0)
+    ) {
+      const { note_attachments: _omit, ...legacyRow } = row;
+      const retry = await supabase
+        .from('study_projects')
+        .insert([legacyRow])
+        .select()
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.warn('Supabase createProject error:', error.message);
@@ -149,6 +175,7 @@ export const supabaseDb = {
           paperIds: data.paper_ids || [],
           tasks: data.tasks || [],
           notes: data.notes || [],
+          noteAttachments: data.note_attachments || project.noteAttachments || [],
           resources: data.resources || [],
           createdAt: data.created_at,
           updatedAt: data.updated_at,
@@ -191,6 +218,7 @@ export const supabaseDb = {
     if (updates.paperIds !== undefined) payload.paper_ids = updates.paperIds;
     if (updates.tasks !== undefined) payload.tasks = updates.tasks;
     if (updates.notes !== undefined) payload.notes = updates.notes;
+    if (updates.noteAttachments !== undefined) payload.note_attachments = updates.noteAttachments;
     if (updates.resources !== undefined) payload.resources = updates.resources;
 
     const { error } = await supabase
@@ -200,6 +228,12 @@ export const supabaseDb = {
       .eq('user_id', user.id);
 
     if (error) {
+      if (/note_attachments/i.test(error.message || '') && updates.noteAttachments !== undefined) {
+        return {
+          success: false,
+          error: new Error('Database needs the latest Workspace migration (note_attachments column) to sync PDF/photo notes.'),
+        };
+      }
       console.warn('Supabase updateProject error:', error.message);
       return { success: false, error: new Error(error.message) };
     }
