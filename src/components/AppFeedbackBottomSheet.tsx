@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Star, X, Check, Loader2 } from 'lucide-react';
+import { Star, X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { appFeedbackService, FeedbackSummary } from '../services/appFeedbackService';
+import { useAuth } from '../context/AuthContext';
 
 interface AppFeedbackBottomSheetProps {
   isOpen: boolean;
@@ -13,40 +14,48 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
   onClose,
   onFeedbackSaved,
 }) => {
+  const { currentUser } = useAuth();
   const [selectedStars, setSelectedStars] = useState<number>(0);
   const [hoverStars, setHoverStars] = useState<number | null>(null);
+  const [authorName, setAuthorName] = useState<string>('');
   const [commentText, setCommentText] = useState<string>('');
   const [isSavingRating, setIsSavingRating] = useState<boolean>(false);
-  const [isSavingComment, setIsSavingComment] = useState<boolean>(false);
+  const [isSavingReview, setIsSavingReview] = useState<boolean>(false);
   const [ratingSavedStatus, setRatingSavedStatus] = useState<string | null>(null);
-  const [commentSavedStatus, setCommentSavedStatus] = useState<string | null>(null);
+  const [reviewSavedStatus, setReviewSavedStatus] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load existing visitor feedback when opened
   useEffect(() => {
-    if (isOpen) {
-      appFeedbackService.getFeedbackSummary().then((summary) => {
-        if (summary.userRating) {
-          setSelectedStars(summary.userRating);
-        }
-        if (summary.userComment) {
-          setCommentText(summary.userComment);
-        }
-      });
-      setRatingSavedStatus(null);
-      setCommentSavedStatus(null);
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
+    let active = true;
+
+    setRatingSavedStatus(null);
+    setReviewSavedStatus(null);
+    setSaveError(null);
+
+    appFeedbackService.getFeedbackSummary().then((summary) => {
+      if (!active) return;
+      setSelectedStars(summary.userRating ?? 0);
+      setCommentText(summary.userComment || '');
+      setAuthorName(summary.userAuthorName || currentUser?.name || '');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, currentUser?.name]);
 
   // Handle ESC key to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isSavingRating && !isSavingReview) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, isSavingRating, isSavingReview, onClose]);
 
   if (!isOpen) return null;
 
@@ -54,39 +63,59 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
     setSelectedStars(starVal);
     setIsSavingRating(true);
     setRatingSavedStatus(null);
+    setSaveError(null);
 
-    const result = await appFeedbackService.saveStarRating(starVal);
+    const result = await appFeedbackService.submitFeedback({
+      rating: starVal,
+      authorName: authorName.trim() || currentUser?.name || undefined,
+    });
     setIsSavingRating(false);
 
-    if (result.success) {
-      setRatingSavedStatus('Rating saved! Thank you.');
-      const updatedSummary = await appFeedbackService.getFeedbackSummary();
-      if (onFeedbackSaved) {
-        onFeedbackSaved(updatedSummary);
-      }
+    if (!result.success) {
+      setSaveError(
+        result.error?.message || 'Could not save your rating right now. Please try again.'
+      );
+      return;
     }
+
+    setRatingSavedStatus('Rating saved! Thank you.');
+    const updatedSummary = await appFeedbackService.getFeedbackSummary();
+    onFeedbackSaved?.(updatedSummary);
   };
 
-  const handleCommentSubmit = async (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (isSavingReview) return;
 
-    setIsSavingComment(true);
-    setCommentSavedStatus(null);
-
-    const result = await appFeedbackService.saveComment(commentText);
-    setIsSavingComment(false);
-
-    if (result.success) {
-      setCommentSavedStatus('Comment saved!');
-      const updatedSummary = await appFeedbackService.getFeedbackSummary();
-      if (onFeedbackSaved) {
-        onFeedbackSaved(updatedSummary);
-      }
-      setTimeout(() => {
-        onClose();
-      }, 1200);
+    if (selectedStars < 1 || selectedStars > 5) {
+      setSaveError('Please select a 1 to 5 star rating above first.');
+      return;
     }
+
+    setIsSavingReview(true);
+    setReviewSavedStatus(null);
+    setSaveError(null);
+
+    const result = await appFeedbackService.submitFeedback({
+      rating: selectedStars,
+      comment: commentText,
+      authorName: authorName.trim() || currentUser?.name || 'Student',
+    });
+    setIsSavingReview(false);
+
+    if (!result.success) {
+      setSaveError(
+        result.error?.message || 'Could not save your review right now. Please try again.'
+      );
+      return;
+    }
+
+    setReviewSavedStatus('Review published! Thank you.');
+    const updatedSummary = await appFeedbackService.getFeedbackSummary();
+    onFeedbackSaved?.(updatedSummary);
+    setTimeout(() => {
+      onClose();
+    }, 900);
   };
 
   const starLabels: Record<number, string> = {
@@ -104,7 +133,9 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
       {/* Dimmed backdrop */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 transition-opacity duration-200"
-        onClick={onClose}
+        onClick={() => {
+          if (!isSavingRating && !isSavingReview) onClose();
+        }}
         aria-hidden="true"
       />
 
@@ -113,7 +144,7 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-bottom-sheet-title"
-        className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-lg mx-auto bg-[var(--surface-main)] border-t sm:border-x border-[var(--border-divider)] rounded-t-3xl shadow-2xl p-5 sm:p-6 text-[var(--text-primary)] transition-transform duration-300 ease-out transform translate-y-0"
+        className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-lg mx-auto bg-[var(--surface-main)] border-t sm:border-x border-[var(--border-divider)] rounded-t-3xl shadow-2xl p-5 sm:p-6 text-[var(--text-primary)]"
       >
         {/* Subtle drag handle bar */}
         <div className="w-10 h-1 bg-[var(--text-muted)]/30 rounded-full mx-auto mb-4" />
@@ -125,21 +156,30 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
               id="feedback-bottom-sheet-title"
               className="text-base sm:text-lg font-bold tracking-tight text-[var(--text-primary)]"
             >
-              How has your experience been with Studify?
+              Rate &amp; Review Studify
             </h3>
             <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-              Public feedback on the platform · No sign-in required
+              Public feedback visible to everyone · No sign-in required
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
+            disabled={isSavingRating || isSavingReview}
+            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer disabled:opacity-40"
             aria-label="Close feedback panel"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Error Alert */}
+        {saveError && (
+          <div className="mb-3 p-2.5 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{saveError}</span>
+          </div>
+        )}
 
         {/* 5 Selectable Stars */}
         <div className="py-2 flex flex-col items-center justify-center space-y-2">
@@ -150,10 +190,11 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
                 <button
                   key={starVal}
                   type="button"
+                  disabled={isSavingRating || isSavingReview}
                   onClick={() => handleStarClick(starVal)}
                   onMouseEnter={() => setHoverStars(starVal)}
                   onMouseLeave={() => setHoverStars(null)}
-                  className="p-2 sm:p-2.5 rounded-xl hover:scale-110 active:scale-95 transition-all cursor-pointer bg-[var(--surface-secondary)] border border-[var(--border-divider)]"
+                  className="p-2 sm:p-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all cursor-pointer bg-[var(--surface-secondary)] border border-[var(--border-divider)] disabled:opacity-60"
                   aria-label={`Rate ${starVal} out of 5 stars`}
                 >
                   <Star
@@ -181,41 +222,55 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
                 <span>{ratingSavedStatus}</span>
               </span>
             ) : currentDisplayStars > 0 ? (
-              <span className="font-semibold text-[var(--text-primary)] font-mono">
-                {currentDisplayStars} Stars — {starLabels[currentDisplayStars]}
+              <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                {currentDisplayStars} / 5 — {starLabels[currentDisplayStars]}
               </span>
             ) : (
               <span className="text-[var(--text-muted)] text-[11px]">
-                Tap a star to save your rating instantly
+                Tap a star to save your rating immediately
               </span>
             )}
           </div>
         </div>
 
-        {/* Optional Comment Section */}
-        <form onSubmit={handleCommentSubmit} className="mt-4 pt-3 border-t border-[var(--border-divider)] space-y-3">
+        {/* Display Name & Review Comment Form */}
+        <form
+          onSubmit={handleReviewSubmit}
+          className="mt-4 pt-3 border-t border-[var(--border-divider)] space-y-3"
+        >
           <div>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5 flex items-center justify-between">
-              <span>Tell us what you liked or how we can improve</span>
-              <span className="text-[10px] text-[var(--text-muted)] font-normal">Optional</span>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+              Display Name <span className="text-[var(--text-muted)] font-normal">(Optional — defaults to Student)</span>
+            </label>
+            <input
+              type="text"
+              value={authorName}
+              onChange={(e) => setAuthorName(e.target.value.slice(0, 60))}
+              placeholder="e.g., Aarav Sharma or Guest Student"
+              className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1 flex items-center justify-between">
+              <span>Your Public Review</span>
+              <span className="text-[10px] text-[var(--text-muted)] font-normal tabular-nums">
+                {commentText.length}/500
+              </span>
             </label>
             <textarea
               rows={3}
               value={commentText}
-              onChange={(e) => setCommentText(e.target.value.slice(0, 350))}
-              placeholder="Share your thoughts on speed, navigation, or PYQ coverage..."
-              className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-blue)] resize-none"
+              onChange={(e) => setCommentText(e.target.value.slice(0, 500))}
+              placeholder="Share what helped you or what we can improve..."
+              className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
             />
-            <div className="flex items-center justify-between mt-1 text-[10px] text-[var(--text-muted)]">
-              <span>Star rating is already saved. Comments are optional.</span>
-              <span>{commentText.length}/350</span>
-            </div>
           </div>
 
-          {commentSavedStatus && (
-            <div className="p-2 bg-[var(--color-green)]/15 border border-[var(--color-green)]/30 rounded-lg text-xs text-[var(--color-green)] flex items-center gap-1.5">
+          {reviewSavedStatus && (
+            <div className="p-2 bg-[var(--accent-green-bg)] border border-[var(--color-green)]/30 rounded-lg text-xs text-[var(--color-green)] flex items-center gap-1.5">
               <Check className="w-3.5 h-3.5 shrink-0" />
-              <span>{commentSavedStatus}</span>
+              <span>{reviewSavedStatus}</span>
             </div>
           )}
 
@@ -224,22 +279,23 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="btn-quad-border px-3.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg cursor-pointer"
+              disabled={isSavingRating || isSavingReview}
+              className="btn-quad-border px-3.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg cursor-pointer whitespace-nowrap disabled:opacity-40"
             >
               Close
             </button>
             <button
               type="submit"
-              disabled={isSavingComment || !commentText.trim()}
-              className="btn-quad-border px-4 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+              disabled={isSavingReview || isSavingRating || selectedStars < 1}
+              className="btn-quad-border px-4 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer whitespace-nowrap"
             >
-              {isSavingComment ? (
+              {isSavingReview ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Saving...</span>
+                  <span>Publishing...</span>
                 </>
               ) : (
-                <span>Save Comment</span>
+                <span>Submit Review</span>
               )}
             </button>
           </div>

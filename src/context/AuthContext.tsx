@@ -35,6 +35,7 @@ export function syncAccountCacheIsolation(prevUserId: string | null, nextUserId:
 
   storageService.clearInMemoryState();
   workspaceService.clearLocalWorkspaceCache();
+  workspaceService.setStorageScope(nextUserId ? 'user' : 'guest');
   removalService.clearLocalReports();
 
   if (prevUserId !== null) {
@@ -119,6 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nextUserId: string | null = supabaseUser?.id || null;
 
       syncAccountCacheIsolation(activeUserIdRef.current, nextUserId);
+      workspaceService.setStorageScope(nextUserId ? 'user' : 'guest');
       activeUserIdRef.current = nextUserId;
 
       if (!supabaseUser) {
@@ -203,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthReady(true);
       storageService.clearInMemoryState();
       workspaceService.clearLocalWorkspaceCache();
+      workspaceService.setStorageScope('guest');
       removalService.clearLocalReports();
       clearStudifyContentCaches();
       if (hadUser && typeof window !== 'undefined') {

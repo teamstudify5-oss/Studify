@@ -20,7 +20,10 @@ import { supabase } from './supabaseClient.js';
 import { WorkspacePage } from './pages/WorkspacePage';
 import { CommandCenter } from './components/workspace/CommandCenter';
 import { QuickCaptureModal } from './components/workspace/QuickCaptureModal';
+import { WorkspaceOnboardingModal } from './components/workspace/WorkspaceOnboardingModal';
+import { CreateProjectModal, PostCreateAction } from './components/workspace/CreateProjectModal';
 import { workspaceService } from './services/workspaceService';
+import { StudyProject } from './types/workspace';
 import { downloadPaperAsset } from './services/paperDownloadService';
 import { DownloadLimitModal } from './components/DownloadLimitModal';
 import { downloadQuotaService, DownloadQuota } from './services/downloadQuotaService';
@@ -46,7 +49,12 @@ function MainApp() {
   // Student Workspace & Command Center State
   const [isCommandCenterOpen, setIsCommandCenterOpen] = useState<boolean>(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState<boolean>(false);
+  const [isWorkspaceOnboardingOpen, setIsWorkspaceOnboardingOpen] = useState<boolean>(false);
+  const [isGlobalCreateProjectOpen, setIsGlobalCreateProjectOpen] = useState<boolean>(false);
+  const [globalCaptureDefaultProjectId, setGlobalCaptureDefaultProjectId] = useState<string | undefined>(undefined);
   const [selectedWorkspaceProjectId, setSelectedWorkspaceProjectId] = useState<string | undefined>(undefined);
+  const [selectedWorkspaceProjectTab, setSelectedWorkspaceProjectTab] = useState<'tasks' | 'papers' | 'notes' | 'resources'>('tasks');
+  const [autoOpenProjectNoteComposer, setAutoOpenProjectNoteComposer] = useState<boolean>(false);
 
   // Feature 2: PDF Download Quota State
   const [isDownloadLimitModalOpen, setIsDownloadLimitModalOpen] = useState<boolean>(false);
@@ -72,7 +80,10 @@ function MainApp() {
 
     const syncLibraryAndBookmarks = async () => {
       if (!isAuthenticated || !currentUser?.id) {
+        workspaceService.setStorageScope('guest');
         workspaceService.clearLocalWorkspaceCache();
+      } else {
+        workspaceService.setStorageScope('user');
       }
 
       const [papersRes, savedRes] = await Promise.all([
@@ -102,6 +113,7 @@ function MainApp() {
         setSavedPaperIds(savedRes.synced ? savedRes.ids : []);
 
         if (isAuthenticated && currentUser?.id) {
+          await workspaceService.syncGuestItemsToSupabaseIfAny();
           const wsRes = await workspaceService.fetchFromSupabase();
           if (active && wsRes.synced) {
             window.dispatchEvent(new CustomEvent('studify:workspace-updated'));
@@ -207,6 +219,40 @@ function MainApp() {
     setToastVariant(variant);
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), variant === 'error' ? 4000 : 2500);
+  };
+
+  const handleGlobalQuickCaptureRequest = () => {
+    const projects = workspaceService.getProjects();
+    if (projects.length === 0) {
+      setIsWorkspaceOnboardingOpen(true);
+      return;
+    }
+    setGlobalCaptureDefaultProjectId(selectedWorkspaceProjectId || projects[0].id);
+    setIsQuickCaptureOpen(true);
+  };
+
+  const handleGlobalProjectCreated = (created: StudyProject, nextAction: PostCreateAction) => {
+    setIsGlobalCreateProjectOpen(false);
+    setSelectedWorkspaceProjectId(created.id);
+    workspaceService.recordSessionState({ activeProjectId: created.id });
+
+    if (nextAction === 'capture') {
+      setGlobalCaptureDefaultProjectId(created.id);
+      setIsQuickCaptureOpen(true);
+      return;
+    }
+
+    if (nextAction === 'notes') {
+      setSelectedWorkspaceProjectTab('notes');
+      setAutoOpenProjectNoteComposer(true);
+      setCurrentTab('workspace');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    setSelectedWorkspaceProjectTab('tasks');
+    setAutoOpenProjectNoteComposer(false);
+    setCurrentTab('workspace');
   };
 
   const handleSelectPaper = (paper: Paper) => {
@@ -375,7 +421,7 @@ function MainApp() {
           }}
           onRequireLogin={() => setIsLoginRequiredOpen(true)}
           onOpenCommandCenter={() => setIsCommandCenterOpen(true)}
-          onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+          onOpenQuickCapture={handleGlobalQuickCaptureRequest}
         />
       </div>
 
@@ -539,6 +585,8 @@ function MainApp() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             initialProjectId={selectedWorkspaceProjectId}
+            initialProjectTab={selectedWorkspaceProjectTab}
+            autoOpenNoteComposer={autoOpenProjectNoteComposer}
           />
         )}
       </main>
@@ -575,17 +623,46 @@ function MainApp() {
         onSelectPaper={handleSelectPaper}
         onOpenProject={(projectId) => {
           setSelectedWorkspaceProjectId(projectId);
+          setSelectedWorkspaceProjectTab('tasks');
+          setAutoOpenProjectNoteComposer(false);
           setCurrentTab('workspace');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-        onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+        onOpenQuickCapture={handleGlobalQuickCaptureRequest}
+      />
+
+      {/* Global Project Workspace Onboarding Gate */}
+      <WorkspaceOnboardingModal
+        isOpen={isWorkspaceOnboardingOpen}
+        onClose={() => setIsWorkspaceOnboardingOpen(false)}
+        onContinue={() => {
+          setIsWorkspaceOnboardingOpen(false);
+          setIsGlobalCreateProjectOpen(true);
+        }}
+      />
+
+      {/* Global Create Project Modal (from Quick Capture Gate) */}
+      <CreateProjectModal
+        isOpen={isGlobalCreateProjectOpen}
+        onClose={() => setIsGlobalCreateProjectOpen(false)}
+        onCreated={handleGlobalProjectCreated}
+        fromQuickCaptureGate={true}
       />
 
       {/* Global Quick Capture Modal */}
       <QuickCaptureModal
         isOpen={isQuickCaptureOpen}
         onClose={() => setIsQuickCaptureOpen(false)}
+        defaultProjectId={globalCaptureDefaultProjectId}
         onSaved={(title) => showToast(`Captured: ${title}`)}
+        onOpenProjectNotes={(projectId) => {
+          setSelectedWorkspaceProjectId(projectId);
+          setSelectedWorkspaceProjectTab('notes');
+          setAutoOpenProjectNoteComposer(true);
+          setCurrentTab('workspace');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onRequestCreateProject={() => setIsGlobalCreateProjectOpen(true)}
       />
 
       {/* Sign-in Modal */}

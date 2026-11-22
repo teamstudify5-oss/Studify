@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Folder, 
-  Plus, 
-  Calendar, 
-  CheckCircle2, 
-  Zap, 
-  Trash2, 
-  FileText, 
+import {
+  Folder,
+  Plus,
+  CheckCircle2,
+  Zap,
+  Trash2,
+  FileText,
   RotateCcw,
-  FolderPlus,
   Bookmark,
-  X
+  X,
+  LogIn,
+  Cloud,
 } from 'lucide-react';
 import { Paper } from '../types';
 import { StudyProject, QuickCaptureItem, WorkspaceSession } from '../types/workspace';
@@ -18,6 +18,8 @@ import { workspaceService } from '../services/workspaceService';
 import { useAuth } from '../context/AuthContext';
 import { ProjectWorkspaceView } from '../components/workspace/ProjectWorkspaceView';
 import { QuickCaptureModal } from '../components/workspace/QuickCaptureModal';
+import { WorkspaceOnboardingModal } from '../components/workspace/WorkspaceOnboardingModal';
+import { CreateProjectModal, PostCreateAction } from '../components/workspace/CreateProjectModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { supabase } from '../supabaseClient.js';
 
@@ -27,6 +29,8 @@ interface WorkspacePageProps {
   onDownloadPaper: (paper: Paper, e?: React.MouseEvent) => void;
   onNavigateToBrowse: () => void;
   initialProjectId?: string;
+  initialProjectTab?: 'tasks' | 'papers' | 'notes' | 'resources';
+  autoOpenNoteComposer?: boolean;
 }
 
 export const WorkspacePage: React.FC<WorkspacePageProps> = ({
@@ -34,41 +38,51 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   onSelectPaper,
   onDownloadPaper,
   onNavigateToBrowse,
-  initialProjectId
+  initialProjectId,
+  initialProjectTab = 'tasks',
+  autoOpenNoteComposer = false,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, openAuthModal } = useAuth();
   const [projects, setProjects] = useState<StudyProject[]>([]);
   const [captures, setCaptures] = useState<QuickCaptureItem[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(initialProjectId || null);
+  const [requestedProjectTab, setRequestedProjectTab] = useState<'tasks' | 'papers' | 'notes' | 'resources'>(
+    initialProjectTab
+  );
+  const [shouldOpenNoteComposer, setShouldOpenNoteComposer] = useState<boolean>(autoOpenNoteComposer);
   const [activeTab, setActiveTab] = useState<'projects' | 'inbox'>('projects');
-  
-  // Modals
+
+  // Modals & Onboarding Gate
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [createFromCaptureGate, setCreateFromCaptureGate] = useState(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
+  const [captureDefaultProjectId, setCaptureDefaultProjectId] = useState<string | undefined>(undefined);
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; title: string } | null>(null);
   const [captureFilter, setCaptureFilter] = useState<string>('all');
-  
-  // New Project Form
-  const [newTitle, setNewTitle] = useState('');
-  const [newSubject, setNewSubject] = useState('');
-  const [newBoard, setNewBoard] = useState('');
-  const [newTargetExam, setNewTargetExam] = useState('');
-  const [newTargetDate, setNewTargetDate] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [showOptionalDetails, setShowOptionalDetails] = useState(false);
+  const [isGuestBannerDismissed, setIsGuestBannerDismissed] = useState(false);
 
   // Session restore
   const [previousSession, setPreviousSession] = useState<WorkspaceSession | null>(null);
 
-  // Total Notes real count for authenticated user
+  // Total Notes real count
   const [totalNotes, setTotalNotes] = useState<number>(0);
 
-  const fetchNotesCount = async () => {
+  useEffect(() => {
+    if (initialProjectId) {
+      setActiveProjectId(initialProjectId);
+      setRequestedProjectTab(initialProjectTab);
+      setShouldOpenNoteComposer(autoOpenNoteComposer);
+    }
+  }, [initialProjectId, initialProjectTab, autoOpenNoteComposer]);
+
+  const fetchNotesCount = async (currentProjects?: StudyProject[]) => {
+    const projectSource = currentProjects || workspaceService.getProjects();
+    const localCount = projectSource.reduce((acc, p) => acc + (p.notes ? p.notes.length : 0), 0);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        const localProjects = workspaceService.getProjects();
-        const localCount = localProjects.reduce((acc, p) => acc + (p.notes ? p.notes.length : 0), 0);
         setTotalNotes(localCount);
         return;
       }
@@ -79,18 +93,22 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
         .eq('user_id', user.id);
 
       if (error) {
-        const localProjects = workspaceService.getProjects();
-        const localCount = localProjects.reduce((acc, p) => acc + (p.notes ? p.notes.length : 0), 0);
         setTotalNotes(localCount);
         return;
       }
 
-      setTotalNotes(count ?? 0);
+      setTotalNotes(Math.max(count ?? 0, localCount));
     } catch {
-      const localProjects = workspaceService.getProjects();
-      const localCount = localProjects.reduce((acc, p) => acc + (p.notes ? p.notes.length : 0), 0);
       setTotalNotes(localCount);
     }
+  };
+
+  const loadData = () => {
+    const latestProjects = workspaceService.getProjects();
+    const latestCaptures = workspaceService.getQuickCaptures();
+    setProjects(latestProjects);
+    setCaptures(latestCaptures);
+    void fetchNotesCount(latestProjects);
   };
 
   useEffect(() => {
@@ -98,33 +116,41 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
     const syncWorkspace = async () => {
       if (!currentUser?.id) {
-        workspaceService.clearLocalWorkspaceCache();
+        workspaceService.setStorageScope('guest');
+        loadData();
+        const session = workspaceService.getLastSession();
         if (active) {
-          setProjects([]);
-          setCaptures([]);
-          setTotalNotes(0);
-          setActiveProjectId(null);
-          setPreviousSession(null);
+          if (
+            session?.activeProjectId &&
+            workspaceService.getProjectById(session.activeProjectId)
+          ) {
+            setPreviousSession(session);
+          } else {
+            setPreviousSession(null);
+          }
         }
         return;
       }
 
+      workspaceService.setStorageScope('user');
       loadData();
       const res = await workspaceService.fetchFromSupabase();
       if (!active) return;
       if (res.synced) {
         setProjects(res.projects);
         setCaptures(res.captures);
+        void fetchNotesCount(res.projects);
       }
-      fetchNotesCount();
 
       const session = workspaceService.getLastSession();
-      if (session && session.activeProjectId) {
+      if (session?.activeProjectId && res.projects.some((p) => p.id === session.activeProjectId)) {
         setPreviousSession(session);
+      } else {
+        setPreviousSession(null);
       }
     };
 
-    syncWorkspace();
+    void syncWorkspace();
 
     const handleWorkspaceUpdated = () => {
       if (active) loadData();
@@ -137,42 +163,48 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     };
   }, [currentUser?.id]);
 
-  const loadData = () => {
-    setProjects(workspaceService.getProjects());
-    setCaptures(workspaceService.getQuickCaptures());
-    fetchNotesCount();
-  };
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-
-    const { project: created } = await workspaceService.createProjectAsync({
-      title: newTitle.trim(),
-      description: newDescription.trim() || undefined,
-      subject: newSubject.trim() || undefined,
-      examBoard: newBoard || undefined,
-      targetExam: newTargetExam.trim() || undefined,
-      targetDate: newTargetDate || undefined,
-      color: 'cyan',
-    });
-
-    loadData();
-    setNewTitle('');
-    setNewSubject('');
-    setNewBoard('');
-    setNewTargetExam('');
-    setNewTargetDate('');
-    setNewDescription('');
-    setShowOptionalDetails(false);
-    setIsNewProjectModalOpen(false);
-
-    if (created) {
-      setActiveProjectId(created.id);
+  const handleRequestQuickCapture = (preferredProjectId?: string) => {
+    const existingProjects = workspaceService.getProjects();
+    if (existingProjects.length === 0) {
+      setIsOnboardingOpen(true);
+      return;
     }
+    setCaptureDefaultProjectId(preferredProjectId || activeProjectId || existingProjects[0].id);
+    setIsQuickCaptureOpen(true);
   };
 
-  const handleOpenProject = (id: string) => {
+  const handleOpenCreateModal = (fromGate: boolean = false) => {
+    setCreateFromCaptureGate(fromGate);
+    setIsNewProjectModalOpen(true);
+  };
+
+  const handleProjectCreated = (created: StudyProject, nextAction: PostCreateAction) => {
+    loadData();
+    setIsNewProjectModalOpen(false);
+    setCreateFromCaptureGate(false);
+    workspaceService.recordSessionState({ activeProjectId: created.id });
+
+    if (nextAction === 'capture') {
+      setCaptureDefaultProjectId(created.id);
+      setIsQuickCaptureOpen(true);
+      return;
+    }
+
+    if (nextAction === 'notes') {
+      setRequestedProjectTab('notes');
+      setShouldOpenNoteComposer(true);
+      setActiveProjectId(created.id);
+      return;
+    }
+
+    setRequestedProjectTab('tasks');
+    setShouldOpenNoteComposer(false);
+    setActiveProjectId(created.id);
+  };
+
+  const handleOpenProject = (id: string, tab: 'tasks' | 'papers' | 'notes' | 'resources' = 'tasks', openComposer = false) => {
+    setRequestedProjectTab(tab);
+    setShouldOpenNoteComposer(openComposer);
     setActiveProjectId(id);
     workspaceService.recordSessionState({ activeProjectId: id });
   };
@@ -207,18 +239,37 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     const selectedProject = projects.find((p) => p.id === activeProjectId);
     if (selectedProject) {
       return (
-        <ProjectWorkspaceView
-          project={selectedProject}
-          allPapers={papers}
-          onBack={() => {
-            setActiveProjectId(null);
-            loadData();
-          }}
-          onSelectPaper={onSelectPaper}
-          onDownloadPaper={onDownloadPaper}
-          onProjectUpdated={() => loadData()}
-          onAttachMorePapers={onNavigateToBrowse}
-        />
+        <>
+          <ProjectWorkspaceView
+            project={selectedProject}
+            allPapers={papers}
+            onBack={() => {
+              setActiveProjectId(null);
+              setShouldOpenNoteComposer(false);
+              loadData();
+            }}
+            onSelectPaper={onSelectPaper}
+            onDownloadPaper={onDownloadPaper}
+            onProjectUpdated={() => loadData()}
+            onAttachMorePapers={onNavigateToBrowse}
+            initialTab={requestedProjectTab}
+            autoOpenNoteComposer={shouldOpenNoteComposer}
+            onOpenQuickCapture={(projectId) => handleRequestQuickCapture(projectId)}
+          />
+
+          <QuickCaptureModal
+            isOpen={isQuickCaptureOpen}
+            onClose={() => setIsQuickCaptureOpen(false)}
+            defaultProjectId={captureDefaultProjectId || selectedProject.id}
+            onSaved={() => {
+              loadData();
+            }}
+            onOpenProjectNotes={(projectId) => {
+              handleOpenProject(projectId, 'notes', true);
+            }}
+            onRequestCreateProject={() => handleOpenCreateModal(true)}
+          />
+        </>
       );
     }
   }
@@ -236,6 +287,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     if (captureFilter === 'all') return true;
     return c.type === captureFilter;
   });
+
+  const projectTitleById = new Map(projects.map((p) => [p.id, p.title]));
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
@@ -263,8 +316,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setIsQuickCaptureOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
+            onClick={() => handleRequestQuickCapture()}
+            className="px-3.5 py-2 rounded-xl bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border whitespace-nowrap"
           >
             <Zap className="w-3.5 h-3.5 text-[var(--color-yellow)]" />
             <span>Quick Capture</span>
@@ -272,14 +325,53 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsNewProjectModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer btn-quad-border"
+            onClick={() => handleOpenCreateModal(false)}
+            className="px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer btn-quad-border whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Project</span>
           </button>
         </div>
       </div>
+
+      {/* Logged-Out Guest Sync Suggestion Banner */}
+      {!currentUser && !isGuestBannerDismissed && (
+        <div className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center shrink-0 mt-0.5">
+              <Cloud className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="text-xs font-semibold text-[var(--text-primary)]">
+                Saved on this browser · Sign in to sync across devices
+              </div>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                Your projects and notes work offline right here. Sign in to back up your workspace on any device and unlock PYQ uploads and bookmarks.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={() => openAuthModal('login')}
+              className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In to Sync</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsGuestBannerDismissed(true)}
+              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+              aria-label="Dismiss sign-in suggestion"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Session Restoration Banner */}
       {previousSession && previousSession.activeProjectId && (
@@ -322,7 +414,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <FileText className="w-3.5 h-3.5 text-[var(--color-yellow)]" />
           </div>
           <div className="text-2xl font-bold text-[var(--text-primary)] font-mono tabular-nums">{totalNotes}</div>
-          <div className="text-[11px] text-[var(--text-muted)]">Synced study notes</div>
+          <div className="text-[11px] text-[var(--text-muted)]">
+            {currentUser ? 'Synced study notes' : 'Saved on this browser'}
+          </div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-1">
@@ -351,8 +445,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-[var(--border-divider)] gap-1 overflow-x-auto pb-1">
         <button
+          type="button"
           onClick={() => setActiveTab('projects')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'projects'
               ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
@@ -361,8 +456,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
           Study Projects ({projects.length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('inbox')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'inbox'
               ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
@@ -391,7 +487,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-[var(--accent-blue)]">{proj.subject || 'General Workspace'}</span>
                       {proj.targetDate && (
-                        <span className="text-[11px] text-[var(--color-yellow)] font-mono">
+                        <span className="text-[11px] text-[var(--color-yellow)] font-mono tabular-nums">
                           Target: {proj.targetDate}
                         </span>
                       )}
@@ -413,7 +509,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                     <div className="space-y-1 pt-1">
                       <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
                         <span>Milestones</span>
-                        <span className="font-mono">{pct}% ({compTasks}/{proj.tasks.length})</span>
+                        <span className="font-mono tabular-nums">{pct}% ({compTasks}/{proj.tasks.length})</span>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-[var(--surface-secondary)] overflow-hidden">
                         <div
@@ -426,7 +522,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
                   {/* Footer Info */}
                   <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2 text-[var(--text-muted)]">
+                    <div className="flex items-center gap-2 text-[var(--text-muted)] tabular-nums">
                       <span>{proj.paperIds.filter((id) => visiblePaperIds.has(id)).length} papers</span>
                       <span>·</span>
                       <span>{proj.notes.length} notes</span>
@@ -453,7 +549,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
             {/* Create Project Card Placeholder */}
             <div
-              onClick={() => setIsNewProjectModalOpen(true)}
+              onClick={() => handleOpenCreateModal(false)}
               className="p-6 rounded-xl border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] bg-[var(--surface-main)]/50 hover:bg-[var(--surface-elevated)] cursor-pointer flex flex-col items-center justify-center text-center space-y-2.5 transition-all min-h-[190px]"
             >
               <div className="w-9 h-9 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center">
@@ -474,12 +570,13 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       {activeTab === 'inbox' && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-1.5 text-xs">
+            <div className="flex flex-wrap gap-1.5 text-xs">
               {['all', 'thought', 'formula', 'doubt', 'resource'].map((f) => (
                 <button
                   key={f}
+                  type="button"
                   onClick={() => setCaptureFilter(f)}
-                  className={`px-3 py-1 rounded-lg capitalize font-medium transition-colors ${
+                  className={`px-3 py-1 rounded-lg capitalize font-medium transition-colors cursor-pointer ${
                     captureFilter === f
                       ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-main)] border border-[var(--border-divider)]'
@@ -491,241 +588,138 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             </div>
 
             <button
-              onClick={() => setIsQuickCaptureOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              type="button"
+              onClick={() => handleRequestQuickCapture()}
+              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Capture Thought</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCaptures.map((item) => (
-              <div
-                key={item.id}
-                className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
-                  item.isResolved
-                    ? 'bg-[var(--surface-secondary)]/50 border-[var(--border-divider)] opacity-60'
-                    : 'bg-[var(--surface-main)] border-[var(--border-divider)] hover:border-[var(--border-hover)]'
-                }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-[10px] px-2 py-0.5 rounded uppercase bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] font-medium">
-                      {item.type}
-                    </span>
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                      {new Date(item.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  {item.title && (
-                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">{item.title}</h4>
-                  )}
-
-                  <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
-                    {item.content}
-                  </p>
-
-                  {item.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {item.tags.map((t) => (
-                        <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between text-xs">
-                  <button
-                    onClick={() => handleToggleResolveCapture(item.id)}
-                    className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] hover:underline"
-                  >
-                    <CheckCircle2 className={`w-3.5 h-3.5 ${item.isResolved ? 'text-[var(--color-green)]' : ''}`} />
-                    <span>{item.isResolved ? 'Completed' : 'Mark Resolved'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleDeleteCapture(item.id)}
-                    className="text-[var(--text-muted)] hover:text-[var(--color-red)] p-1 transition-colors"
-                    title="Delete item"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+          {filteredCaptures.length === 0 ? (
+            <div className="p-8 text-center bg-[var(--surface-main)]/85 border border-[var(--border-divider)] rounded-xl space-y-2.5">
+              <Zap className="w-6 h-6 text-[var(--color-yellow)] mx-auto" />
+              <div className="text-sm font-semibold text-[var(--text-primary)]">
+                {projects.length === 0
+                  ? 'Create a Study Project to start capturing'
+                  : 'No Quick Captures yet'}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* CREATE NEW PROJECT MODAL */}
-      {isNewProjectModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
-          onClick={() => {
-            setIsNewProjectModalOpen(false);
-            setShowOptionalDetails(false);
-          }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-lg bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl shadow-xl p-5 sm:p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[var(--border-divider)] pb-3">
-              <div className="flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-[var(--accent-blue)]" />
-                <div>
-                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Create New Project</h3>
-                  <p className="text-[11px] text-[var(--text-secondary)]">General-purpose workspace. Only project name is required.</p>
-                </div>
-              </div>
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+                {projects.length === 0
+                  ? 'Quick Capture saves thoughts, formulas, and doubts inside a project workspace.'
+                  : 'Save formulas, exam doubts, and quick study reminders directly into any of your projects.'}
+              </p>
               <button
-                onClick={() => {
-                  setIsNewProjectModalOpen(false);
-                  setShowOptionalDetails(false);
-                }}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer p-1"
-                aria-label="Close modal"
+                type="button"
+                onClick={() => handleRequestQuickCapture()}
+                className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                {projects.length === 0 ? 'Create Project & Capture' : 'Capture Thought'}
               </button>
             </div>
-
-            <form onSubmit={handleCreateProject} className="space-y-4">
-              <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1 font-medium">
-                  Project Name <span className="text-[var(--accent-blue)]">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="e.g. Modern Physics Notes, Research Hub, Q1 Exam Prep"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors"
-                />
-              </div>
-
-              {/* Collapsible / Optional details toggle */}
-              <div className="border border-[var(--border-divider)] rounded-lg bg-[var(--surface-main)] overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowOptionalDetails(!showOptionalDetails)}
-                  className="w-full p-2.5 text-left flex items-center justify-between hover:bg-[var(--surface-elevated)] transition-colors"
-                >
-                  <span className="text-xs font-medium text-[var(--text-secondary)]">
-                    {showOptionalDetails ? '− Optional Details (Subject, Board, Target Date)' : '+ Optional Details (Subject, Board, Target Date)'}
-                  </span>
-                  <span className="text-[11px] text-[var(--accent-blue)] font-medium">
-                    {showOptionalDetails ? 'Hide' : 'Add Details'}
-                  </span>
-                </button>
-
-                {showOptionalDetails && (
-                  <div className="p-3 pt-0 space-y-3 border-t border-[var(--border-divider)]">
-                    <div className="grid grid-cols-2 gap-3 pt-3">
-                      <div>
-                        <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">Subject (Optional)</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Science, Math"
-                          value={newSubject}
-                          onChange={(e) => setNewSubject(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
-                        />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCaptures.map((item) => {
+                const projName = item.projectId ? projectTitleById.get(item.projectId) : undefined;
+                return (
+                  <div
+                    key={item.id}
+                    className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
+                      item.isResolved
+                        ? 'bg-[var(--surface-secondary)]/50 border-[var(--border-divider)] opacity-60'
+                        : 'bg-[var(--surface-main)] border-[var(--border-divider)] hover:border-[var(--border-hover)]'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs gap-2">
+                        <span className="font-mono text-[10px] uppercase text-[var(--color-yellow)] font-semibold">
+                          {item.type}{projName ? ` · ${projName}` : ''}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono tabular-nums shrink-0">
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
-                      <div>
-                        <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">Board / Exam (Optional)</label>
-                        <select
-                          value={newBoard}
-                          onChange={(e) => setNewBoard(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
-                        >
-                          <option value="">None / Not Applicable</option>
-                          <option value="CBSE">CBSE</option>
-                          <option value="ICSE">ICSE</option>
-                          <option value="JEE Main">JEE Main</option>
-                          <option value="JEE Advanced">JEE Advanced</option>
-                          <option value="NEET UG">NEET UG</option>
-                          <option value="State Board">State Board</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
+
+                      {item.title && (
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)]">{item.title}</h4>
+                      )}
+
+                      <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+                        {item.content}
+                      </p>
+
+                      {item.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {item.tags.map((t) => (
+                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">Specific Goal (Optional)</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Midterms / Entrance"
-                          value={newTargetExam}
-                          onChange={(e) => setNewTargetExam(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">Target Date (Optional)</label>
-                        <input
-                          type="date"
-                          value={newTargetDate}
-                          onChange={(e) => setNewTargetDate(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
-                        />
-                      </div>
-                    </div>
+                    <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between text-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleResolveCapture(item.id)}
+                        className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] hover:underline cursor-pointer"
+                      >
+                        <CheckCircle2 className={`w-3.5 h-3.5 ${item.isResolved ? 'text-[var(--color-green)]' : ''}`} />
+                        <span>{item.isResolved ? 'Completed' : 'Mark Resolved'}</span>
+                      </button>
 
-                    <div>
-                      <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">Description (Optional)</label>
-                      <textarea
-                        rows={2}
-                        placeholder="What is your focus for this project? (Optional)"
-                        value={newDescription}
-                        onChange={(e) => setNewDescription(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCapture(item.id)}
+                        className="text-[var(--text-muted)] hover:text-[var(--color-red)] p-1 transition-colors cursor-pointer"
+                        title="Delete item"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
-
-              <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsNewProjectModalOpen(false);
-                    setShowOptionalDetails(false);
-                  }}
-                  className="px-3.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer btn-quad-border"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-xs transition-opacity flex items-center gap-1.5 cursor-pointer btn-quad-border"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Create Project</span>
-                </button>
-              </div>
-            </form>
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
+
+      {/* PROJECT WORKSPACE ONBOARDING MODAL */}
+      <WorkspaceOnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        onContinue={() => {
+          setIsOnboardingOpen(false);
+          handleOpenCreateModal(true);
+        }}
+      />
+
+      {/* CREATE NEW PROJECT MODAL */}
+      <CreateProjectModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => {
+          setIsNewProjectModalOpen(false);
+          setCreateFromCaptureGate(false);
+        }}
+        onCreated={handleProjectCreated}
+        fromQuickCaptureGate={createFromCaptureGate}
+      />
 
       {/* QUICK CAPTURE MODAL */}
       <QuickCaptureModal
         isOpen={isQuickCaptureOpen}
         onClose={() => setIsQuickCaptureOpen(false)}
+        defaultProjectId={captureDefaultProjectId || projects[0]?.id}
         onSaved={() => {
-          setCaptures(workspaceService.getQuickCaptures());
+          loadData();
         }}
+        onOpenProjectNotes={(projectId) => {
+          handleOpenProject(projectId, 'notes', true);
+        }}
+        onRequestCreateProject={() => handleOpenCreateModal(true)}
       />
 
       {confirmDeleteProject && (

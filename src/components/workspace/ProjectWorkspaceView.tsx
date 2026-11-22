@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -14,10 +14,13 @@ import {
   Download, 
   Eye, 
   FolderPlus,
-  Pin
+  Pin,
+  Zap,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { Paper } from '../../types';
-import { StudyProject } from '../../types/workspace';
+import { StudyProject, QuickCaptureItem } from '../../types/workspace';
 import { workspaceService } from '../../services/workspaceService';
 
 interface ProjectWorkspaceViewProps {
@@ -28,6 +31,9 @@ interface ProjectWorkspaceViewProps {
   onDownloadPaper: (paper: Paper, e?: React.MouseEvent) => void;
   onProjectUpdated: (updated: StudyProject) => void;
   onAttachMorePapers: () => void;
+  initialTab?: 'tasks' | 'papers' | 'notes' | 'resources';
+  autoOpenNoteComposer?: boolean;
+  onOpenQuickCapture?: (projectId: string) => void;
 }
 
 export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
@@ -37,10 +43,16 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   onSelectPaper,
   onDownloadPaper,
   onProjectUpdated,
-  onAttachMorePapers
+  onAttachMorePapers,
+  initialTab = 'tasks',
+  autoOpenNoteComposer = false,
+  onOpenQuickCapture,
 }) => {
-  const [activeTab, setActiveTab] = useState<'tasks' | 'papers' | 'notes' | 'resources'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'papers' | 'notes' | 'resources'>(initialTab);
   const [currentProject, setCurrentProject] = useState<StudyProject>(project);
+  const [projectCaptures, setProjectCaptures] = useState<QuickCaptureItem[]>(() =>
+    workspaceService.getQuickCaptures().filter((c) => c.projectId === project.id)
+  );
 
   // New task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -48,10 +60,12 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
   // New note form state
-  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [isAddingNote, setIsAddingNote] = useState(autoOpenNoteComposer);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [noteTags] = useState<string[]>([]);
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   // New resource form state
   const [isAddingResource, setIsAddingResource] = useState(false);
@@ -60,12 +74,40 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   const [resType, setResType] = useState<'link' | 'video' | 'doc' | 'book'>('link');
   const [resNotes, setResNotes] = useState('');
 
+  useEffect(() => {
+    setCurrentProject(project);
+    setProjectCaptures(workspaceService.getQuickCaptures().filter((c) => c.projectId === project.id));
+  }, [project]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab, project.id]);
+
+  useEffect(() => {
+    if (autoOpenNoteComposer) {
+      setIsAddingNote(true);
+    }
+  }, [autoOpenNoteComposer, project.id]);
+
+  useEffect(() => {
+    const syncFromStore = () => {
+      const fresh = workspaceService.getProjectById(project.id);
+      if (fresh) {
+        setCurrentProject(fresh);
+      }
+      setProjectCaptures(workspaceService.getQuickCaptures().filter((c) => c.projectId === project.id));
+    };
+    window.addEventListener('studify:workspace-updated', syncFromStore);
+    return () => window.removeEventListener('studify:workspace-updated', syncFromStore);
+  }, [project.id]);
+
   const refreshProject = () => {
     const updated = workspaceService.getProjectById(currentProject.id);
     if (updated) {
       setCurrentProject(updated);
       onProjectUpdated(updated);
     }
+    setProjectCaptures(workspaceService.getQuickCaptures().filter((c) => c.projectId === currentProject.id));
   };
 
   // Task actions
@@ -91,13 +133,25 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   // Note actions
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!noteContent.trim()) return;
-    await workspaceService.saveNoteAsync(currentProject.id, {
+    if (!noteContent.trim() || isSavingNote) return;
+
+    setIsSavingNote(true);
+    setNoteError(null);
+
+    const { note, error } = await workspaceService.saveNoteAsync(currentProject.id, {
       title: noteTitle.trim() || 'Study Note',
       content: noteContent.trim(),
       tags: noteTags,
       isPinned: false
     });
+
+    setIsSavingNote(false);
+
+    if (error || !note) {
+      setNoteError(error?.message || 'Could not save study note. Please try again.');
+      return;
+    }
+
     setNoteTitle('');
     setNoteContent('');
     setIsAddingNote(false);
@@ -106,6 +160,16 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
 
   const handleDeleteNote = (noteId: string) => {
     workspaceService.deleteNote(currentProject.id, noteId);
+    refreshProject();
+  };
+
+  const handleToggleResolveCapture = (captureId: string) => {
+    workspaceService.toggleResolveQuickCapture(captureId);
+    refreshProject();
+  };
+
+  const handleDeleteCapture = (captureId: string) => {
+    workspaceService.deleteQuickCapture(captureId);
     refreshProject();
   };
 
@@ -269,7 +333,7 @@ Generated from Studify Student Workspace.
         {[
           { id: 'tasks' as const, label: `Tasks (${currentProject.tasks.length})` },
           { id: 'papers' as const, label: `Attached Papers (${attachedPapers.length})` },
-          { id: 'notes' as const, label: `Notes (${currentProject.notes.length})` },
+          { id: 'notes' as const, label: `Notes (${currentProject.notes.length + projectCaptures.length})` },
           { id: 'resources' as const, label: `Resources (${currentProject.resources.length})` },
         ].map((tab) => (
           <button
@@ -483,31 +547,53 @@ Generated from Studify Student Workspace.
         </div>
       )}
 
-      {/* TAB 3: Study Notes & Formulas */}
+      {/* TAB 3: Study Notes, Quick Captures & Formulas */}
       {activeTab === 'notes' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-[var(--text-secondary)]">
-              Your dedicated project scratchpad, formula cheat sheet, and notes.
+              Your dedicated project notes, formula cheat sheets, and quick captures.
             </p>
-            <button
-              type="button"
-              onClick={() => setIsAddingNote(!isAddingNote)}
-              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{isAddingNote ? 'Cancel' : 'New Note'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenQuickCapture && (
+                <button
+                  type="button"
+                  onClick={() => onOpenQuickCapture(currentProject.id)}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--accent-yellow-bg)] hover:opacity-90 text-[var(--color-yellow)] border border-[var(--color-yellow)]/30 text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Quick Capture</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteError(null);
+                  setIsAddingNote(!isAddingNote);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{isAddingNote ? 'Cancel' : 'New Note'}</span>
+              </button>
+            </div>
           </div>
 
           {isAddingNote && (
             <form onSubmit={handleSaveNote} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3 shadow-xs">
               <div className="text-xs font-semibold text-[var(--text-primary)]">Create Study Note</div>
+              {noteError && (
+                <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{noteError}</span>
+                </div>
+              )}
               <input
                 type="text"
                 placeholder="Note Title (e.g. Ray Optics Formulas)"
                 value={noteTitle}
                 onChange={(e) => setNoteTitle(e.target.value)}
+                disabled={isSavingNote}
                 className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               />
               <textarea
@@ -516,63 +602,143 @@ Generated from Studify Student Workspace.
                 placeholder="Write your study notes, derivations, formulae, or key conceptual bullet points..."
                 value={noteContent}
                 onChange={(e) => setNoteContent(e.target.value)}
+                disabled={isSavingNote}
                 className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] resize-none"
               />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddingNote(false)}
+                  onClick={() => {
+                    setIsAddingNote(false);
+                    setNoteError(null);
+                  }}
+                  disabled={isSavingNote}
                   className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer btn-quad-border"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer btn-quad-border"
+                  disabled={isSavingNote || !noteContent.trim()}
+                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer btn-quad-border flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  Save Note
+                  {isSavingNote ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Note</span>
+                  )}
                 </button>
               </div>
             </form>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {currentProject.notes.map((note) => (
-              <div
-                key={note.id}
-                className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-2.5 shadow-xs"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    {note.isPinned && <Pin className="w-3.5 h-3.5 text-[var(--accent-blue)] fill-current" />}
-                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">{note.title}</h4>
+          {currentProject.notes.length === 0 && projectCaptures.length === 0 ? (
+            <div className="p-8 text-center bg-[var(--surface-main)]/85 border border-[var(--border-divider)] rounded-xl space-y-2.5">
+              <FileText className="w-6 h-6 text-[var(--text-muted)] mx-auto" />
+              <div className="text-xs font-semibold text-[var(--text-primary)]">No notes or captures in this project yet</div>
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+                Click New Note for full study sheets or Quick Capture to save formulas and reminders instantly.
+              </p>
+            </div>
+          ) : (
+            <>
+              {currentProject.notes.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {currentProject.notes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-2.5 shadow-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {note.isPinned && <Pin className="w-3.5 h-3.5 text-[var(--accent-blue)] fill-current" />}
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">{note.title}</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteNote(note.id)}
+                          className="text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
+                          title="Delete note"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed bg-[var(--surface-secondary)]/50 p-2.5 rounded-lg border border-[var(--border-divider)]">
+                        {note.content}
+                      </div>
+
+                      {note.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {note.tags.map((t) => (
+                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {projectCaptures.length > 0 && (
+                <div className="space-y-3 pt-2">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Project Quick Captures ({projectCaptures.length})
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteNote(note.id)}
-                    className="text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
-                    title="Delete note"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed bg-[var(--surface-secondary)]/50 p-2.5 rounded-lg border border-[var(--border-divider)]">
-                  {note.content}
-                </div>
-
-                {note.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {note.tags.map((t) => (
-                      <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
-                        #{t}
-                      </span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {projectCaptures.map((cap) => (
+                      <div
+                        key={cap.id}
+                        className={`p-3.5 rounded-xl border transition-colors space-y-2 ${
+                          cap.isResolved
+                            ? 'bg-[var(--surface-secondary)]/40 border-[var(--border-divider)] opacity-65'
+                            : 'bg-[var(--surface-main)]/85 border-[var(--border-divider)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-mono uppercase text-[var(--color-yellow)] font-semibold">
+                            {cap.type}
+                          </span>
+                          <span className="font-mono tabular-nums text-[var(--text-muted)]">
+                            {new Date(cap.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {cap.title && (
+                          <div className="text-xs font-semibold text-[var(--text-primary)]">{cap.title}</div>
+                        )}
+                        <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+                          {cap.content}
+                        </p>
+                        <div className="pt-2 border-t border-[var(--border-divider)] flex items-center justify-between text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleResolveCapture(cap.id)}
+                            className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] hover:underline cursor-pointer"
+                          >
+                            <CheckCircle2 className={`w-3.5 h-3.5 ${cap.isResolved ? 'text-[var(--color-green)]' : ''}`} />
+                            <span>{cap.isResolved ? 'Completed' : 'Mark Resolved'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCapture(cap.id)}
+                            className="text-[var(--text-muted)] hover:text-[var(--color-red)] p-1 transition-colors cursor-pointer"
+                            title="Delete capture"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

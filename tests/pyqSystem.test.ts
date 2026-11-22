@@ -12,7 +12,11 @@ import {
 } from '../src/services/communityPyqService';
 import { parseStorageBucketAndPath } from '../src/services/supabaseStorage';
 import { storageService } from '../src/services/storage';
-import { workspaceService } from '../src/services/workspaceService';
+import { workspaceService, createWorkspaceService } from '../src/services/workspaceService';
+import {
+  createAppFeedbackService,
+  computeFeedbackBreakdown,
+} from '../src/services/appFeedbackService';
 import { syncAccountCacheIsolation } from '../src/context/AuthContext';
 
 // Lightweight in-memory localStorage mock for Node test runner isolation
@@ -44,6 +48,7 @@ after(() => {
 beforeEach(() => {
   mockStore.clear();
   storageService.clearInMemoryState();
+  workspaceService.setStorageScope('user');
 });
 
 interface MockSupabaseOptions {
@@ -1378,4 +1383,302 @@ test('Scenario 19: Consolidated SQL migration enforces SECURITY DEFINER hardenin
   assert.match(executableSql, /owner_id = \(SELECT auth\.uid\(\)::text\)/);
   assert.match(executableSql, /owner = \(SELECT auth\.uid\(\)\)/);
   assert.match(executableSql, /public\.is_admin\(\(SELECT auth\.uid\(\)\)\)/);
+});
+
+test('Scenario 20: Workspace guest/user persistence, Quick Capture project gate, DB error surfacing, and guest migration', async () => {
+  const createdProjectsInDb: any[] = [];
+  const createdCapturesInDb: any[] = [];
+  const createdNotesInDb: any[] = [];
+  let shouldFailProjectWrite = false;
+  let shouldFailCaptureWrite = false;
+  let shouldFailNoteWrite = false;
+
+  const mockDb: any = {
+    loadProjectsWithStatus: async () => ({ projects: [...createdProjectsInDb], synced: true }),
+    loadQuickCapturesWithStatus: async () => ({ captures: [...createdCapturesInDb], synced: true }),
+    createProjectWithStatus: async (project: any) => {
+      if (shouldFailProjectWrite) {
+        return { project: null, error: new Error('column "exam_board" does not exist') };
+      }
+      createdProjectsInDb.push(project);
+      return { project, error: null };
+    },
+    updateProjectWithStatus: async () => ({ success: true, error: null }),
+    updateProject: async () => true,
+    deleteProject: async () => true,
+    createQuickCaptureWithStatus: async (item: any) => {
+      if (shouldFailCaptureWrite) {
+        return { item: null, error: new Error('column "content" of relation "quick_captures" does not exist') };
+      }
+      createdCapturesInDb.push(item);
+      return { item, error: null };
+    },
+    updateQuickCapture: async () => true,
+    deleteQuickCapture: async () => true,
+    createNoteWithStatus: async (note: any) => {
+      if (shouldFailNoteWrite) {
+        return { success: false, error: new Error('notes RLS insert blocked') };
+      }
+      createdNotesInDb.push(note);
+      return { success: true, error: null };
+    },
+    deleteNote: async () => true,
+  };
+
+  const ws = createWorkspaceService(mockDb);
+
+  // 20A: Guest mode persists projects, notes, and Quick Captures locally, isolated from user cache
+  ws.setStorageScope('guest');
+  const blockedGuestCapture = await ws.addQuickCaptureAsync({
+    content: 'Blocked before project exists',
+    type: 'thought',
+  });
+  assert.equal(blockedGuestCapture.item, null);
+  assert.match(String(blockedGuestCapture.error?.message || ''), /Create a Study Project first/i);
+
+  const guestProjRes = await ws.createProjectAsync({
+    title: 'Guest Physics Revision',
+    subject: 'Physics',
+    color: 'cyan',
+  });
+  assert.equal(guestProjRes.error, null);
+  assert.ok(guestProjRes.project);
+  assert.equal(ws.getProjects().length, 1);
+
+  const guestNoteRes = await ws.saveNoteAsync(guestProjRes.project.id, {
+    title: 'Gauss Law Summary',
+    content: 'Flux = q / epsilon_0',
+    tags: ['Electrostatics'],
+  });
+  assert.equal(guestNoteRes.error, null);
+  assert.equal(ws.getProjects()[0].notes.length, 1);
+
+  const guestCapRes = await ws.addQuickCaptureAsync({
+    title: 'Key Formula',
+    content: 'E = -dV/dr',
+    type: 'formula',
+    projectId: guestProjRes.project.id,
+  });
+  assert.equal(guestCapRes.error, null);
+  assert.equal(guestCapRes.item?.projectId, guestProjRes.project.id);
+  assert.equal(createdProjectsInDb.length, 0);
+
+  // 20B: Account switch clears user cache while preserving guest items until migrated on sign-in
+  ws.setStorageScope('user');
+  ws.saveProjects([
+    {
+      id: 'user-a-proj',
+      title: 'User A Private Project',
+      color: 'cyan',
+      paperIds: [],
+      tasks: [],
+      notes: [],
+      resources: [],
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ]);
+  syncAccountCacheIsolation('user-a', null);
+  assert.equal(workspaceService.getStorageScope(), 'guest');
+
+  // Guest items migrate to Supabase on sign-in and guest keys are cleared afterwards
+  ws.setStorageScope('user');
+  const migrated = await ws.syncGuestItemsToSupabaseIfAny();
+  assert.equal(migrated.migratedProjects, 1);
+  assert.equal(migrated.migratedCaptures, 1);
+  assert.equal(createdProjectsInDb.length, 1);
+  assert.equal(createdNotesInDb.length, 1);
+  assert.equal(createdCapturesInDb.length, 1);
+  assert.equal(mockStore.has('studify_guest_projects_v1'), false);
+  assert.equal(mockStore.has('studify_guest_captures_v1'), false);
+
+  // 20C: Signed-in mode propagates real Supabase DB errors without faking saved items
+  shouldFailProjectWrite = true;
+  const failedProj = await ws.createProjectAsync({ title: 'Should Fail DB', color: 'cyan' });
+  assert.equal(failedProj.project, null);
+  assert.match(String(failedProj.error?.message || ''), /exam_board/);
+  assert.equal(ws.getProjects().some((p) => p.title === 'Should Fail DB'), false);
+  shouldFailProjectWrite = false;
+
+  const userProjRes = await ws.createProjectAsync({ title: 'Verified DB Project', color: 'cyan' });
+  assert.equal(userProjRes.error, null);
+  assert.ok(userProjRes.project);
+
+  shouldFailCaptureWrite = true;
+  const failedCap = await ws.addQuickCaptureAsync({
+    content: 'Should not silently pretend saved',
+    type: 'doubt',
+    projectId: userProjRes.project.id,
+  });
+  assert.equal(failedCap.item, null);
+  assert.match(String(failedCap.error?.message || ''), /quick_captures/);
+  shouldFailCaptureWrite = false;
+
+  shouldFailNoteWrite = true;
+  const failedNote = await ws.saveNoteAsync(userProjRes.project.id, {
+    title: 'Should Fail Note',
+    content: 'Body',
+    tags: [],
+  });
+  assert.equal(failedNote.note, null);
+  assert.match(String(failedNote.error?.message || ''), /notes RLS/i);
+});
+
+test('Scenario 21: Play Store app rating breakdown, public guest RPC persistence, and DB error propagation', async () => {
+  // 21A: Pure breakdown & average calculation across ratings with and without comments
+  const breakdownSummary = computeFeedbackBreakdown(
+    [
+      {
+        id: '1',
+        visitorId: 'v-1',
+        authorName: 'Aarav',
+        rating: 5,
+        comment: 'Super fast PYQ search!',
+        createdAt: '2026-11-20T10:00:00Z',
+        updatedAt: '2026-11-20T10:00:00Z',
+      },
+      {
+        id: '2',
+        visitorId: 'v-2',
+        authorName: 'Student',
+        rating: 4,
+        comment: '',
+        createdAt: '2026-11-20T11:00:00Z',
+        updatedAt: '2026-11-20T11:00:00Z',
+      },
+      {
+        id: '3',
+        visitorId: 'v-3',
+        authorName: 'Meera',
+        rating: 5,
+        comment: 'Love the clean study workspace.',
+        createdAt: '2026-11-20T12:00:00Z',
+        updatedAt: '2026-11-20T12:00:00Z',
+      },
+    ],
+    'v-1'
+  );
+  assert.equal(breakdownSummary.totalRatings, 3);
+  assert.equal(breakdownSummary.totalReviews, 2);
+  assert.equal(breakdownSummary.averageRating, 4.7);
+  assert.deepEqual(breakdownSummary.ratingBreakdown, { 5: 2, 4: 1, 3: 0, 2: 0, 1: 0 });
+  assert.equal(breakdownSummary.userRating, 5);
+  assert.equal(breakdownSummary.userAuthorName, 'Aarav');
+  assert.equal(breakdownSummary.items.length, 2);
+
+  // 21B: RPC write + read stores public visitor rating/comment and never drops existing data
+  const storedRows: any[] = [];
+  let forceRpcWriteError = false;
+  const mockSupabaseClient: any = {
+    rpc: async (fnName: string, args: any) => {
+      if (fnName === 'submit_app_feedback') {
+        if (forceRpcWriteError) {
+          return { data: null, error: { code: '42501', message: 'permission denied for table app_feedback' } };
+        }
+        const existingIdx = storedRows.findIndex((r) => r.visitor_id === args.p_visitor_id);
+        const now = new Date().toISOString();
+        if (existingIdx !== -1) {
+          const prev = storedRows[existingIdx];
+          storedRows[existingIdx] = {
+            ...prev,
+            rating: args.p_rating ?? prev.rating,
+            comment: args.p_comment ?? prev.comment,
+            author_name: args.p_author_name || prev.author_name || 'Student',
+            updated_at: now,
+          };
+          return { data: { success: true, item: storedRows[existingIdx] }, error: null };
+        }
+        const inserted = {
+          id: `fb_${storedRows.length + 1}`,
+          visitor_id: args.p_visitor_id,
+          author_name: args.p_author_name || 'Student',
+          rating: args.p_rating ?? 5,
+          comment: args.p_comment ?? '',
+          created_at: now,
+          updated_at: now,
+        };
+        storedRows.push(inserted);
+        return { data: { success: true, item: inserted }, error: null };
+      }
+
+      if (fnName === 'get_app_feedback_summary') {
+        const totalRatings = storedRows.length;
+        const written = storedRows.filter((r) => r.comment && r.comment.trim().length > 0);
+        const avg =
+          totalRatings > 0
+            ? Number((storedRows.reduce((s, r) => s + r.rating, 0) / totalRatings).toFixed(1))
+            : null;
+        return {
+          data: {
+            average_rating: avg,
+            total_ratings: totalRatings,
+            total_reviews: written.length,
+            rating_breakdown: {
+              '5': storedRows.filter((r) => r.rating === 5).length,
+              '4': storedRows.filter((r) => r.rating === 4).length,
+              '3': storedRows.filter((r) => r.rating === 3).length,
+              '2': storedRows.filter((r) => r.rating === 2).length,
+              '1': storedRows.filter((r) => r.rating === 1).length,
+            },
+            user_feedback: storedRows.find((r) => r.visitor_id === args.p_visitor_id) || null,
+            items: written,
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: { code: '42883', message: 'function does not exist' } };
+    },
+  };
+
+  const fbSvc = createAppFeedbackService(mockSupabaseClient);
+  const save1 = await fbSvc.submitFeedback({
+    visitorId: 'guest-browser-1',
+    rating: 5,
+    comment: '<Great> offline & workspace flow!',
+    authorName: 'Riya',
+  });
+  assert.equal(save1.success, true);
+  assert.equal(save1.error, null);
+  assert.equal(save1.feedback?.comment, 'Great offline & workspace flow!');
+  assert.equal(save1.feedback?.authorName, 'Riya');
+
+  const summary = await fbSvc.getFeedbackSummary('guest-browser-1');
+  assert.equal(summary.averageRating, 5);
+  assert.equal(summary.totalRatings, 1);
+  assert.equal(summary.totalReviews, 1);
+  assert.equal(summary.items[0]?.authorName, 'Riya');
+
+  // Must surface failure instead of returning { success: true }
+  forceRpcWriteError = true;
+  const failedSave = await fbSvc.submitFeedback({
+    visitorId: 'guest-browser-2',
+    rating: 4,
+    comment: 'Should fail cleanly',
+  });
+  assert.equal(failedSave.success, false);
+  assert.equal(failedSave.feedback, null);
+  assert.match(String(failedSave.error?.message || ''), /permission denied/i);
+});
+
+test('Scenario 22: Workspace & App Feedback SQL migration aligns schema and hardens public RPCs', () => {
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const migrationPath = path.resolve(
+    thisDir,
+    '../supabase/migrations/20261121_workspace_schema_and_app_feedback.sql'
+  );
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+  const executableSql = sql
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n');
+
+  assert.equal(/\bcurrent_user\b/i.test(executableSql), false, 'Migration must not use unsafe current_user checks');
+  assert.match(executableSql, /ALTER TABLE public\.study_projects ALTER COLUMN subject DROP NOT NULL;/);
+  assert.match(executableSql, /ALTER TABLE public\.quick_captures ADD COLUMN IF NOT EXISTS project_id text;/);
+  assert.match(executableSql, /CREATE OR REPLACE FUNCTION public\.submit_app_feedback/);
+  assert.match(executableSql, /CREATE OR REPLACE FUNCTION public\.get_app_feedback_summary/);
+  assert.match(executableSql, /SET search_path = ''/);
+  assert.match(executableSql, /GRANT EXECUTE ON FUNCTION public\.submit_app_feedback\(text, integer, text, text\) TO anon, authenticated, service_role;/);
+  assert.match(executableSql, /GRANT EXECUTE ON FUNCTION public\.get_app_feedback_summary\(text, integer\) TO anon, authenticated, service_role;/);
 });

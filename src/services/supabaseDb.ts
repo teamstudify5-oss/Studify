@@ -92,30 +92,35 @@ export const supabaseDb = {
   },
 
   /**
-   * Create a new project for the current authenticated user
+   * Create a new project for the current authenticated user, returning explicit error on failure
    */
-  async createProject(project: StudyProject): Promise<StudyProject | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+  async createProjectWithStatus(project: StudyProject): Promise<{ project: StudyProject | null; error: Error | null }> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return {
+        project: null,
+        error: new Error(authError?.message || 'Sign in required to save project to cloud.'),
+      };
+    }
 
     const row = {
       id: project.id,
       user_id: user.id,
       title: project.title,
-      subject: project.subject || null,
+      subject: project.subject?.trim() || '',
       exam_board: project.examBoard || null,
       target_exam: project.targetExam || null,
       target_date: project.targetDate || null,
       color: project.color || 'cyan',
       icon: project.icon || null,
-      description: project.description || '',
+      description: project.description?.trim() || '',
       status: project.status || 'active',
       paper_ids: project.paperIds || [],
       tasks: project.tasks || [],
       notes: project.notes || [],
       resources: project.resources || [],
       created_at: project.createdAt || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      updated_at: project.updatedAt || new Date().toISOString(),
     };
 
     const { data, error } = await supabase
@@ -126,31 +131,62 @@ export const supabaseDb = {
 
     if (error) {
       console.warn('Supabase createProject error:', error.message);
-      return null;
+      return { project: null, error: new Error(error.message) };
     }
 
-    return project;
+    const savedProject: StudyProject = data
+      ? {
+          id: data.id,
+          title: data.title,
+          subject: data.subject || undefined,
+          examBoard: data.exam_board || undefined,
+          targetExam: data.target_exam || undefined,
+          targetDate: data.target_date || undefined,
+          color: data.color || 'cyan',
+          icon: data.icon || undefined,
+          description: data.description || undefined,
+          status: data.status || 'active',
+          paperIds: data.paper_ids || [],
+          tasks: data.tasks || [],
+          notes: data.notes || [],
+          resources: data.resources || [],
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        }
+      : project;
+
+    return { project: savedProject, error: null };
+  },
+
+  async createProject(project: StudyProject): Promise<StudyProject | null> {
+    const res = await this.createProjectWithStatus(project);
+    return res.project;
   },
 
   /**
    * Update an existing project belonging to the user
    */
-  async updateProject(id: string, updates: Partial<StudyProject>): Promise<boolean> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+  async updateProjectWithStatus(id: string, updates: Partial<StudyProject>): Promise<{ success: boolean; error: Error | null }> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return {
+        success: false,
+        error: new Error(authError?.message || 'Sign in required to update project.'),
+      };
+    }
 
     const payload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
 
     if (updates.title !== undefined) payload.title = updates.title;
-    if (updates.subject !== undefined) payload.subject = updates.subject;
-    if (updates.examBoard !== undefined) payload.exam_board = updates.examBoard;
-    if (updates.targetExam !== undefined) payload.target_exam = updates.targetExam;
-    if (updates.targetDate !== undefined) payload.target_date = updates.targetDate;
+    if (updates.subject !== undefined) payload.subject = updates.subject?.trim() || '';
+    if (updates.examBoard !== undefined) payload.exam_board = updates.examBoard || null;
+    if (updates.targetExam !== undefined) payload.target_exam = updates.targetExam || null;
+    if (updates.targetDate !== undefined) payload.target_date = updates.targetDate || null;
     if (updates.color !== undefined) payload.color = updates.color;
-    if (updates.icon !== undefined) payload.icon = updates.icon;
-    if (updates.description !== undefined) payload.description = updates.description;
+    if (updates.icon !== undefined) payload.icon = updates.icon || null;
+    if (updates.description !== undefined) payload.description = updates.description?.trim() || '';
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.paperIds !== undefined) payload.paper_ids = updates.paperIds;
     if (updates.tasks !== undefined) payload.tasks = updates.tasks;
@@ -165,10 +201,15 @@ export const supabaseDb = {
 
     if (error) {
       console.warn('Supabase updateProject error:', error.message);
-      return false;
+      return { success: false, error: new Error(error.message) };
     }
 
-    return true;
+    return { success: true, error: null };
+  },
+
+  async updateProject(id: string, updates: Partial<StudyProject>): Promise<boolean> {
+    const res = await this.updateProjectWithStatus(id, updates);
+    return res.success;
   },
 
   /**
@@ -221,13 +262,13 @@ export const supabaseDb = {
 
     const captures = (data || []).map((row) => ({
       id: row.id,
-      title: row.title,
-      content: row.content,
-      type: row.type,
-      projectId: row.project_id,
-      tags: row.tags || [],
+      title: row.title || undefined,
+      content: row.content || row.text || '',
+      type: (row.type || row.tag || 'thought') as QuickCaptureItem['type'],
+      projectId: row.project_id || undefined,
+      tags: Array.isArray(row.tags) ? row.tags : [],
       createdAt: row.created_at,
-      isResolved: row.is_resolved,
+      isResolved: Boolean(row.is_resolved),
     }));
 
     return { captures, synced: true, error: null };
@@ -239,21 +280,26 @@ export const supabaseDb = {
   },
 
   /**
-   * Create a new quick capture
+   * Create a new quick capture, returning explicit error on failure
    */
-  async createQuickCapture(item: QuickCaptureItem): Promise<QuickCaptureItem | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+  async createQuickCaptureWithStatus(item: QuickCaptureItem): Promise<{ item: QuickCaptureItem | null; error: Error | null }> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return {
+        item: null,
+        error: new Error(authError?.message || 'Sign in required to save capture to cloud.'),
+      };
+    }
 
     const row = {
       id: item.id,
       user_id: user.id,
       title: item.title || '',
       content: item.content,
-      type: item.type,
+      type: item.type || 'thought',
       project_id: item.projectId || null,
-      tags: item.tags,
-      is_resolved: item.isResolved || false,
+      tags: item.tags || [],
+      is_resolved: Boolean(item.isResolved),
       created_at: item.createdAt || new Date().toISOString(),
     };
 
@@ -263,10 +309,15 @@ export const supabaseDb = {
 
     if (error) {
       console.warn('Supabase createQuickCapture error:', error.message);
-      return null;
+      return { item: null, error: new Error(error.message) };
     }
 
-    return item;
+    return { item, error: null };
+  },
+
+  async createQuickCapture(item: QuickCaptureItem): Promise<QuickCaptureItem | null> {
+    const res = await this.createQuickCaptureWithStatus(item);
+    return res.item;
   },
 
   /**
@@ -587,7 +638,7 @@ export const supabaseDb = {
    * Insert or update a note in the "notes" table
    * Bug 15 fix: Preserves original created_at timestamp when updating an existing note
    */
-  async createNote(note: {
+  async createNoteWithStatus(note: {
     id: string;
     projectId?: string;
     title: string;
@@ -595,10 +646,15 @@ export const supabaseDb = {
     tags?: string[];
     isPinned?: boolean;
     createdAt?: string;
-  }): Promise<boolean> {
+  }): Promise<{ success: boolean; error: Error | null }> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return {
+          success: false,
+          error: new Error(authError?.message || 'Sign in required to save note to cloud.'),
+        };
+      }
 
       // Check if note exists in Supabase to preserve its original created_at timestamp
       let originalCreatedAt = note.createdAt;
@@ -633,15 +689,30 @@ export const supabaseDb = {
 
       if (error) {
         console.warn('Supabase createNote error:', error.message);
-        return false;
+        return { success: false, error: new Error(error.message) };
       }
 
-      window.dispatchEvent(new CustomEvent('studify:notes-updated'));
-      return true;
-    } catch (e) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('studify:notes-updated'));
+      }
+      return { success: true, error: null };
+    } catch (e: any) {
       console.warn('createNote exception', e);
-      return false;
+      return { success: false, error: e instanceof Error ? e : new Error(String(e)) };
     }
+  },
+
+  async createNote(note: {
+    id: string;
+    projectId?: string;
+    title: string;
+    content: string;
+    tags?: string[];
+    isPinned?: boolean;
+    createdAt?: string;
+  }): Promise<boolean> {
+    const res = await this.createNoteWithStatus(note);
+    return res.success;
   },
 
   /**
