@@ -60,61 +60,57 @@ export const AboutPage: React.FC<AboutPageProps> = ({
       {/* SVG Etching Definitions for Crosshatching & Textures */}
       <EngravingDefs />
 
-      {/* Symmetrical Background Linework */}
-      <div 
-        className="fixed inset-0 pointer-events-none z-0 opacity-20 mix-blend-screen overflow-hidden"
+      {/* Subtle Symmetrical Background Linework */}
+      <div
+        className="fixed inset-0 pointer-events-none z-0 opacity-20 overflow-hidden text-[var(--text-primary)]"
         aria-hidden="true"
       >
         <SymmetricalBackgroundAura scrollFactor={isReducedMotion ? 0 : scrollProgress} />
       </div>
 
       <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6">
-        {/* SCENE 1: THE PROBLEM */}
+        {/* PART I: THE PROBLEM */}
         <section
           id="scene-problem"
-          className="min-h-[85vh] sm:min-h-[90vh] flex flex-col justify-center items-center text-center py-16 sm:py-24 space-y-8"
+          className="min-h-[80vh] sm:min-h-[85vh] flex flex-col justify-center items-center text-center py-14 sm:py-20 space-y-8"
         >
-          <div className="space-y-4 max-w-xl mx-auto">
-            <div>
-              <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-blue)] font-semibold">
-                SCENE I
-              </span>
-              <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-[var(--text-primary)] leading-tight mt-1">
-                Every question begins somewhere.
-              </h1>
-              <p className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto mt-2">
-                Finding the right study material shouldn't be the hardest part of preparation.
-              </p>
-            </div>
+          <div className="space-y-3 max-w-xl mx-auto">
+            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-mint)] font-semibold">
+              Part I · Context
+            </span>
+            <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-[var(--text-primary)] leading-tight">
+              Every question begins somewhere.
+            </h1>
+            <p className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
+              Finding the right study material shouldn't be the hardest part of preparation.
+            </p>
           </div>
 
-          {/* Illustration 1 */}
-          <div className="w-full max-w-xl mx-auto">
-            <Scene1Problem 
-              scrollProgress={scrollProgress} 
-              isReducedMotion={isReducedMotion} 
+          {/* Illustration 1 framed as a deep-navy archival plate */}
+          <div className="w-full max-w-xl mx-auto bg-[var(--surface-navy)] border border-[var(--border-divider)] rounded-2xl p-4 sm:p-6 shadow-md">
+            <Scene1Problem
+              scrollProgress={scrollProgress}
+              isReducedMotion={isReducedMotion}
             />
           </div>
 
-          {/* Gentle scroll indicator */}
-          <div className="pt-2 flex flex-col items-center gap-1.5 text-xs text-[var(--text-muted)] select-none">
-            <ChevronDown className="w-4 h-4 animate-bounce text-[var(--accent-blue)]/60" />
+          <div className="pt-1 flex flex-col items-center gap-1 text-xs text-[var(--text-muted)] select-none">
+            <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
         </section>
 
-        {/* Subtle Divider */}
         <div className="w-24 h-[1px] bg-[var(--border-divider)] mx-auto" aria-hidden="true" />
 
-        {/* SCENE 2: THE SEARCH */}
+        {/* PART II: THE SEARCH */}
         <section
           id="scene-search"
-          className="min-h-[85vh] sm:min-h-[90vh] flex flex-col justify-center items-center text-center py-16 sm:py-24 space-y-8"
+          className="min-h-[80vh] sm:min-h-[85vh] flex flex-col justify-center items-center text-center py-14 sm:py-20 space-y-8"
         >
           <div className="space-y-3 max-w-xl mx-auto">
-            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-blue)] font-semibold">
-              SCENE II
+            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-mint)] font-semibold">
+              Part II · The Search
             </span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-[var(--text-primary)] leading-tight">
+            <h2 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-[var(--text-primary)] leading-tight">
               Too much searching. Not enough studying.
             </h2>
             <p className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
@@ -122,28 +118,26 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             </p>
           </div>
 
-          {/* Illustration 2 */}
-          <div className="w-full max-w-2xl mx-auto">
-            <Scene2Search 
-              scrollProgress={scrollProgress} 
-              isReducedMotion={isReducedMotion} 
+          <div className="w-full max-w-2xl mx-auto bg-[var(--surface-navy)] border border-[var(--border-divider)] rounded-2xl p-4 sm:p-6 shadow-md">
+            <Scene2Search
+              scrollProgress={scrollProgress}
+              isReducedMotion={isReducedMotion}
             />
           </div>
         </section>
 
-        {/* Subtle Divider */}
         <div className="w-24 h-[1px] bg-[var(--border-divider)] mx-auto" aria-hidden="true" />
 
-        {/* SCENE 3: THE DISCOVERY */}
+        {/* PART III: THE DISCOVERY */}
         <section
           id="scene-discovery"
-          className="min-h-[85vh] sm:min-h-[90vh] flex flex-col justify-center items-center text-center py-16 sm:py-24 space-y-8"
+          className="min-h-[80vh] sm:min-h-[85vh] flex flex-col justify-center items-center text-center py-14 sm:py-20 space-y-8"
         >
           <div className="space-y-3 max-w-xl mx-auto">
-            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-blue)] font-semibold">
-              SCENE III
+            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-mint)] font-semibold">
+              Part III · The Archive
             </span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-[var(--text-primary)] leading-tight">
+            <h2 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-[var(--text-primary)] leading-tight">
               One place to find what you need.
             </h2>
             <p className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
@@ -151,28 +145,26 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             </p>
           </div>
 
-          {/* Illustration 3 */}
-          <div className="w-full max-w-xl mx-auto">
-            <Scene3Discovery 
-              scrollProgress={scrollProgress} 
-              isReducedMotion={isReducedMotion} 
+          <div className="w-full max-w-xl mx-auto bg-[var(--surface-navy)] border border-[var(--border-divider)] rounded-2xl p-4 sm:p-6 shadow-md">
+            <Scene3Discovery
+              scrollProgress={scrollProgress}
+              isReducedMotion={isReducedMotion}
             />
           </div>
         </section>
 
-        {/* Subtle Divider */}
         <div className="w-24 h-[1px] bg-[var(--border-divider)] mx-auto" aria-hidden="true" />
 
-        {/* SCENE 4: THE COMMITMENT */}
+        {/* PART IV: THE COMMITMENT */}
         <section
           id="scene-commitment"
-          className="min-h-[85vh] sm:min-h-[90vh] flex flex-col justify-center items-center text-center py-16 sm:py-24 space-y-8 pb-28"
+          className="min-h-[80vh] sm:min-h-[85vh] flex flex-col justify-center items-center text-center py-14 sm:py-20 space-y-8 pb-24"
         >
           <div className="space-y-3 max-w-xl mx-auto">
-            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-blue)] font-semibold">
-              SCENE IV
+            <span className="text-[11px] font-mono tracking-widest uppercase text-[var(--accent-mint)] font-semibold">
+              Part IV · Focused Work
             </span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-[var(--text-primary)] leading-tight">
+            <h2 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-[var(--text-primary)] leading-tight">
               Find your material. Do the work.
             </h2>
             <p className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
@@ -180,27 +172,26 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             </p>
           </div>
 
-          {/* Illustration 4 */}
-          <div className="w-full max-w-xl mx-auto">
-            <Scene4Commitment 
-              scrollProgress={scrollProgress} 
-              isReducedMotion={isReducedMotion} 
+          <div className="w-full max-w-xl mx-auto bg-[var(--surface-navy)] border border-[var(--border-divider)] rounded-2xl p-4 sm:p-6 shadow-md">
+            <Scene4Commitment
+              scrollProgress={scrollProgress}
+              isReducedMotion={isReducedMotion}
             />
           </div>
 
-          {/* Wordmark Signature — No logo emblem */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--surface-main)] border border-[var(--border-divider)] text-xs text-[var(--text-secondary)]">
+          {/* Wordmark Signature */}
+          <div className="text-xs font-mono tracking-wider uppercase text-[var(--text-muted)]">
             <span className="font-bold text-[var(--text-primary)]">Studify</span>
-            <span>·</span>
+            <span className="mx-2">·</span>
             <span>Open Study Archive</span>
           </div>
 
           {/* Call to Action Button */}
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               type="button"
               onClick={onExploreMaterials}
-              className="px-6 py-3 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#1C2530] text-xs sm:text-sm font-semibold rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+              className="px-6 py-3 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs sm:text-sm font-semibold rounded-xl transition-opacity shadow-xs flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Explore study materials</span>
               <ArrowRight className="w-4 h-4" />

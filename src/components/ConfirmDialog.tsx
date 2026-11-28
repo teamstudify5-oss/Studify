@@ -66,7 +66,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   const dialogContent = (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-[var(--modal-backdrop)]"
       role="presentation"
       onClick={() => {
         if (!isBusy) onCancel();
@@ -82,7 +82,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <div className="flex items-center justify-between pb-2 border-b border-[var(--border-divider)]">
           <h3
             id="confirm-dialog-title"
-            className={`font-semibold text-sm flex items-center gap-2 ${
+            className={`font-display font-semibold text-sm flex items-center gap-2 ${
               isPrimary ? 'text-[var(--accent-blue)]' : 'text-[var(--color-red)]'
             }`}
           >
@@ -118,7 +118,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             type="button"
             onClick={onCancel}
             disabled={isBusy}
-            className="px-3.5 py-1.5 border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer disabled:opacity-40 btn-quad-border"
+            className="px-3.5 py-1.5 border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer disabled:opacity-40"
           >
             {cancelLabel}
           </button>
@@ -126,8 +126,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={isBusy}
-            className={`px-4 py-1.5 text-white font-semibold rounded-lg transition-opacity shadow-xs cursor-pointer disabled:opacity-50 btn-quad-border ${
-              isPrimary ? 'bg-[var(--accent-blue)] hover:opacity-90' : 'bg-[var(--color-red)] hover:opacity-90'
+            className={`px-4 py-1.5 font-semibold rounded-lg transition-opacity shadow-xs cursor-pointer disabled:opacity-50 ${
+              isPrimary
+                ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] hover:opacity-90'
+                : 'bg-[var(--color-red)] text-white hover:opacity-90'
             }`}
           >
             {isBusy ? busyLabel : confirmLabel}

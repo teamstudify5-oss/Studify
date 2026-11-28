@@ -195,9 +195,9 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
     : 'Download PDF';
 
   return (
-    <div className="border border-[var(--border-divider)] rounded-2xl bg-[var(--surface-main)]/90 backdrop-blur-md overflow-hidden shadow-sm">
-      {/* Top Floating Toolbar (Embedded Preview + Direct Download Only) */}
-      <div className="border-b border-[var(--border-divider)] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs bg-[var(--surface-elevated)]/80">
+    <div className="border border-[var(--border-divider)] rounded-2xl bg-[var(--surface-main)] overflow-hidden shadow-xs">
+      {/* Top Toolbar */}
+      <div className="border-b border-[var(--border-divider)] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs bg-[var(--surface-elevated)]">
         <div className="text-[var(--text-primary)] truncate font-mono text-[11px] flex items-center gap-2">
           {isImagePaper ? (
             <Layers className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
@@ -206,8 +206,8 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
           )}
           <span>{paper.fileName || `${paper.subject}_${paper.year}`}</span>
           {isImagePaper && rawImageTargets.length > 1 && (
-            <span className="px-2 py-0.5 rounded-full bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-bold text-[10px]">
-              Page {currentImagePageIndex + 1} of {rawImageTargets.length}
+            <span className="text-[var(--accent-blue)] font-semibold tabular-nums text-[11px]">
+              · Page {currentImagePageIndex + 1} of {rawImageTargets.length}
             </span>
           )}
         </div>
@@ -223,7 +223,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="px-1.5 font-mono text-[11px] text-[var(--accent-blue)] font-bold select-none">
+            <span className="px-1.5 font-mono tabular-nums text-[11px] text-[var(--accent-blue)] font-bold select-none">
               {zoomLevel}%
             </span>
             <button
@@ -241,7 +241,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
             type="button"
             onClick={onDownload}
             disabled={isDownloading}
-            className="px-3.5 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+            className="px-3.5 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] font-semibold text-xs rounded-lg transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{downloadLabel}</span>
@@ -257,14 +257,14 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
         >
           {hasStructuredTextQuestions ? (
             <div className="space-y-4">
-              <div className="border border-[var(--border-divider)] rounded-xl p-5 bg-[var(--surface-main)]/90 backdrop-blur-md text-center space-y-2 shadow-xs">
+              <div className="border border-[var(--border-divider)] rounded-xl p-5 bg-[var(--surface-main)] text-center space-y-2 shadow-xs">
                 <div className="text-[11px] font-mono text-[var(--accent-blue)] uppercase tracking-wider font-semibold">
                   Authentic Examination Paper
                 </div>
-                <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+                <h2 className="font-display text-base sm:text-lg font-bold text-[var(--text-primary)]">
                   {paper.examBoard} — {paper.grade}
                 </h2>
-                <div className="text-xs text-[var(--text-secondary)]">
+                <div className="text-xs text-[var(--text-secondary)] tabular-nums">
                   {paper.subject} · Year {paper.year} {paper.eventName ? `· ${paper.eventName}` : ''}
                 </div>
                 {(hasMarks || hasDuration) && (
@@ -299,7 +299,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
                     {section.questions.map((q) => (
                       <div
                         key={q.id}
-                        className="p-4 bg-[var(--surface-main)]/90 backdrop-blur-md border border-[var(--border-divider)] rounded-xl space-y-2"
+                        className="p-4 bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl space-y-2"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-2.5 flex-1">
@@ -342,9 +342,9 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
                         key={idx}
                         type="button"
                         onClick={() => setCurrentImagePageIndex(idx)}
-                        className={`w-7 h-7 rounded-lg font-mono text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
+                        className={`w-7 h-7 rounded-lg font-mono tabular-nums text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
                           currentImagePageIndex === idx
-                            ? 'bg-[var(--accent-blue)] text-white'
+                            ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640]'
                             : 'bg-[var(--surface-main)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-divider)]'
                         }`}
                       >
@@ -430,7 +430,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
                   type="button"
                   onClick={onDownload}
                   disabled={isDownloading}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs btn-quad-border disabled:opacity-60"
+                  className="px-4 py-2 text-xs font-semibold text-white dark:text-[#0A2640] bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>{footerDownloadLabel}</span>
@@ -440,13 +440,13 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
           ) : (
             <div className="space-y-4">
               {loadingPreview ? (
-                <div className="py-16 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)]/90 backdrop-blur-md p-8 space-y-3">
+                <div className="py-16 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)] p-8 space-y-3">
                   <div className="w-5 h-5 border-2 border-[var(--accent-blue)] border-t-transparent rounded-full animate-spin mx-auto" />
                   <p>Loading embedded PDF preview...</p>
                 </div>
               ) : previewPdfUrl ? (
                 <div className="space-y-3">
-                  <div className="border border-[var(--border-divider)] rounded-xl overflow-hidden bg-[var(--surface-main)]/90 backdrop-blur-md">
+                  <div className="border border-[var(--border-divider)] rounded-xl overflow-hidden bg-[var(--surface-main)]">
                     <iframe
                       src={`${previewPdfUrl}#toolbar=0`}
                       title={paper.fileName || paper.title}
@@ -458,7 +458,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
                       type="button"
                       onClick={onDownload}
                       disabled={isDownloading}
-                      className="px-4 py-2 text-xs font-semibold text-white bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs btn-quad-border disabled:opacity-60"
+                      className="px-4 py-2 text-xs font-semibold text-white dark:text-[#0A2640] bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>{footerDownloadLabel}</span>
@@ -466,7 +466,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="py-12 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)]/90 backdrop-blur-md p-8 space-y-3">
+                <div className="py-12 text-center text-xs text-[var(--text-secondary)] border border-[var(--border-divider)] rounded-xl bg-[var(--surface-main)] p-8 space-y-3">
                   <p>{previewError || `Document: ${paper.fileName}`}</p>
                   <div className="flex items-center justify-center gap-2">
                     {previewError && (
@@ -483,7 +483,7 @@ export const PaperViewer: React.FC<PaperViewerProps> = ({
                       type="button"
                       onClick={onDownload}
                       disabled={isDownloading}
-                      className="px-4 py-2 text-xs font-semibold text-white bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-all cursor-pointer btn-quad-border disabled:opacity-60"
+                      className="px-4 py-2 text-xs font-semibold text-white dark:text-[#0A2640] bg-[var(--accent-blue)] hover:opacity-90 rounded-lg transition-opacity cursor-pointer disabled:opacity-60"
                     >
                       {footerDownloadLabel}
                     </button>

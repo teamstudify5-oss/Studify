@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  CheckCircle2, 
-  Circle, 
-  Plus, 
-  Trash2, 
-  FileText, 
-  ExternalLink, 
-  Video, 
-  Book, 
-  Link as LinkIcon, 
-  Calendar, 
-  Download, 
-  Eye, 
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Circle,
+  Plus,
+  Trash2,
+  FileText,
+  ExternalLink,
+  Video,
+  Book,
+  Link as LinkIcon,
+  Calendar,
+  Download,
+  Eye,
   FolderPlus,
   Pin,
   Zap,
@@ -22,10 +22,12 @@ import {
   UploadCloud,
   Image as ImageIcon,
   Cloud,
-  HardDrive
+  HardDrive,
+  Columns3,
+  Clock,
 } from 'lucide-react';
 import { Paper } from '../../types';
-import { StudyProject, QuickCaptureItem, ProjectNoteAttachment } from '../../types/workspace';
+import { StudyProject, QuickCaptureItem, ProjectNoteAttachment, ProjectTask } from '../../types/workspace';
 import { workspaceService } from '../../services/workspaceService';
 import { formatFileSize } from '../../services/noteAttachmentStore';
 import {
@@ -68,6 +70,10 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
   const [projectCaptures, setProjectCaptures] = useState<QuickCaptureItem[]>(() =>
     workspaceService.getQuickCaptures().filter((c) => c.projectId === project.id)
   );
+
+  // Schedule Management 2019 view states
+  const [taskViewMode, setTaskViewMode] = useState<'timeline' | 'board'>('timeline');
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   // New task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -167,7 +173,7 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
       title: noteTitle.trim() || 'Study Note',
       content: noteContent.trim(),
       tags: noteTags,
-      isPinned: false
+      isPinned: false,
     });
 
     setIsSavingNote(false);
@@ -250,7 +256,7 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
       title: resTitle.trim(),
       url: resUrl.trim(),
       type: resType,
-      notes: resNotes.trim() || undefined
+      notes: resNotes.trim() || undefined,
     });
     setResTitle('');
     setResUrl('');
@@ -276,7 +282,7 @@ export const ProjectWorkspaceView: React.FC<ProjectWorkspaceViewProps> = ({
 
   // Export summary
   const handleExportSummary = () => {
-    const text = 
+    const text =
 `STUDIFY PROJECT: ${currentProject.title}
 Subject: ${currentProject.subject || 'General'} | Target: ${currentProject.targetExam || 'Not specified'}
 Target Date: ${currentProject.targetDate || 'Not specified'}
@@ -316,106 +322,184 @@ Generated from Studify Student Workspace.
     URL.revokeObjectURL(url);
   };
 
+  // Filtered and grouped tasks for Schedule Timeline & Priority Board
+  const visibleTasks = currentProject.tasks.filter((task) => {
+    if (taskStatusFilter === 'pending') return !task.completed;
+    if (taskStatusFilter === 'completed') return task.completed;
+    return true;
+  });
+
+  const scheduledTasks = [...visibleTasks]
+    .filter((t) => Boolean(t.dueDate && t.dueDate.trim()))
+    .sort((a, b) => {
+      const da = Date.parse(a.dueDate || '');
+      const db = Date.parse(b.dueDate || '');
+      if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+      return (a.dueDate || '').localeCompare(b.dueDate || '');
+    });
+
+  const flexibleTasks = visibleTasks.filter((t) => !t.dueDate || !t.dueDate.trim());
+
+  const renderPriorityText = (priority: ProjectTask['priority']) => {
+    if (priority === 'high') {
+      return <span className="text-[11px] font-semibold text-[var(--color-red)]">High</span>;
+    }
+    if (priority === 'medium') {
+      return <span className="text-[11px] font-medium text-[var(--accent-blue)]">Medium</span>;
+    }
+    return <span className="text-[11px] text-[var(--text-muted)]">Low</span>;
+  };
+
+  const renderTimelineRow = (task: ProjectTask) => (
+    <div
+      key={task.id}
+      className={`px-4 py-3 flex items-center justify-between gap-3 transition-colors ${
+        task.completed ? 'bg-[var(--surface-elevated)]/50' : 'hover:bg-[var(--surface-elevated)]/40'
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={() => handleToggleTask(task.id)}
+          className="cursor-pointer shrink-0"
+          aria-label={task.completed ? `Mark "${task.title}" incomplete` : `Mark "${task.title}" complete`}
+        >
+          {task.completed ? (
+            <CheckCircle2 className="w-4 h-4 text-[var(--accent-mint)]" />
+          ) : (
+            <Circle className="w-4 h-4 text-[var(--text-muted)] hover:text-[var(--accent-blue)]" />
+          )}
+        </button>
+        <div className="min-w-0">
+          <span
+            className={`text-xs sm:text-sm font-medium block truncate ${
+              task.completed ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'
+            }`}
+          >
+            {task.title}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0">
+        {task.dueDate && (
+          <span className="text-[11px] text-[var(--text-secondary)] font-mono tabular-nums flex items-center gap-1">
+            <Clock className="w-3 h-3 text-[var(--accent-mint)]" />
+            <span>{task.dueDate}</span>
+          </span>
+        )}
+        <span className="hidden sm:inline">{renderPriorityText(task.priority)}</span>
+        <button
+          type="button"
+          onClick={() => handleDeleteTask(task.id)}
+          className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
+          title="Delete task"
+          aria-label="Delete task"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      {/* Top Bar: Back & Quick Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-divider)] pb-4">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      {/* Top Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+          className="min-h-[36px] flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-main)] border border-[var(--border-divider)]"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to All Projects</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportSummary}
-            className="px-3 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
-            title="Export project notes and tasks to text"
-          >
-            <Download className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
-            <span>Export Notes</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleExportSummary}
+          className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer"
+          title="Export project notes and tasks to text"
+        >
+          <Download className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+          <span>Export Summary</span>
+        </button>
       </div>
 
-      {/* Project Banner / Card */}
-      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-3.5 shadow-xs">
+      {/* Project Summary Card */}
+      <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
             {currentProject.subject && (
-              <span className="font-semibold text-[var(--accent-blue)]">
+              <span className="font-semibold text-[var(--accent-mint)]">
                 {currentProject.subject}
               </span>
             )}
             {currentProject.examBoard && (
               <>
-                <span className="text-[var(--text-muted)] opacity-60">·</span>
+                <span aria-hidden="true">·</span>
                 <span>{currentProject.examBoard}</span>
               </>
             )}
             {currentProject.targetExam && (
               <>
-                <span className="text-[var(--text-muted)] opacity-60">·</span>
+                <span aria-hidden="true">·</span>
                 <span>{currentProject.targetExam}</span>
               </>
             )}
           </div>
 
           {currentProject.targetDate && (
-            <div className="flex items-center gap-1 text-xs text-[var(--color-yellow)] font-mono">
-              <Calendar className="w-3 h-3" />
+            <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] font-mono tabular-nums">
+              <Calendar className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
               <span>Target: {currentProject.targetDate}</span>
             </div>
           )}
         </div>
 
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
             {currentProject.title}
           </h1>
           {currentProject.description && (
-            <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-2xl leading-relaxed">
+            <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-2xl leading-relaxed">
               {currentProject.description}
             </p>
           )}
         </div>
 
-        {/* Progress Bar */}
-        <div className="pt-1 max-w-md space-y-1">
+        <div className="pt-1 max-w-md space-y-1.5">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-            <span>Milestones</span>
-            <span className="font-mono text-[var(--text-primary)] font-medium">
-              {progressPercent}% completed ({completedTasks}/{totalTasks} tasks)
+            <span>Milestone Progress</span>
+            <span className="font-mono tabular-nums text-[var(--text-primary)] font-semibold">
+              {progressPercent}% ({completedTasks}/{totalTasks} tasks)
             </span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-[var(--surface-secondary)] overflow-hidden">
             <div
-              className="h-full bg-[var(--accent-blue)] rounded-full transition-all duration-300"
+              className="h-full bg-[var(--accent-mint)] rounded-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex border-b border-[var(--border-divider)] gap-1 overflow-x-auto pb-1">
+      {/* Editorial Underline Tabs */}
+      <div className="flex border-b border-[var(--border-divider)] gap-6 overflow-x-auto">
         {[
-          { id: 'tasks' as const, label: `Tasks (${currentProject.tasks.length})` },
+          { id: 'tasks' as const, label: `Schedule & Tasks (${currentProject.tasks.length})` },
           { id: 'papers' as const, label: `Attached Papers (${attachedPapers.length})` },
           { id: 'notes' as const, label: `Notes (${currentProject.notes.length + projectCaptures.length})` },
           { id: 'resources' as const, label: `Resources (${currentProject.resources.length})` },
         ].map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+            className={`pb-3 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors cursor-pointer -mb-px tabular-nums ${
               activeTab === tab.id
-                ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
+                ? 'border-[var(--accent-blue)] text-[var(--text-primary)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             {tab.label}
@@ -423,12 +507,12 @@ Generated from Studify Student Workspace.
         ))}
       </div>
 
-      {/* TAB 1: Tasks */}
+      {/* TAB 1: Schedule Management 2019 — Timeline + Priority Board */}
       {activeTab === 'tasks' && (
         <div className="space-y-4">
-          {/* Add Task Input Form */}
-          <form onSubmit={handleAddTask} className="p-3.5 sm:p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] space-y-2.5 shadow-xs">
-            <div className="text-xs font-medium text-[var(--text-primary)]">Add Study Milestone or Task</div>
+          {/* Task Composer */}
+          <form onSubmit={handleAddTask} className="p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] space-y-2.5">
+            <div className="text-xs font-semibold text-[var(--text-primary)]">Add Scheduled Study Milestone</div>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
@@ -436,13 +520,13 @@ Generated from Studify Student Workspace.
                 placeholder="e.g. Solve Section C numericals from 2024 paper..."
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
-                className="flex-1 px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
+                className="flex-1 px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
               />
-              <div className="flex gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap gap-2">
                 <select
                   value={newTaskPriority}
-                  onChange={(e) => setNewTaskPriority(e.target.value as any)}
-                  className="px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none"
+                  onChange={(e) => setNewTaskPriority(e.target.value as 'high' | 'medium' | 'low')}
+                  className="px-2.5 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
                 >
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
@@ -450,118 +534,203 @@ Generated from Studify Student Workspace.
                 </select>
                 <input
                   type="text"
-                  placeholder="Due date"
+                  placeholder="Due date (e.g. Nov 12)"
                   value={newTaskDueDate}
                   onChange={(e) => setNewTaskDueDate(e.target.value)}
-                  className="w-24 px-2.5 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
+                  className="w-36 px-2.5 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)]"
                 />
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1 cursor-pointer btn-quad-border"
+                  className="px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
+                  <span>Add Task</span>
                 </button>
               </div>
             </div>
           </form>
 
-          {/* Task List */}
-          <div className="space-y-2">
-            {currentProject.tasks.length === 0 ? (
-              <div className="p-8 text-center bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)]">
-                No tasks added yet. Add study goals above to track your progress.
-              </div>
-            ) : (
-              currentProject.tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={`p-3 rounded-xl border transition-colors flex items-center justify-between gap-3 ${
-                    task.completed
-                      ? 'bg-[var(--surface-secondary)]/40 border-[var(--border-divider)] text-[var(--text-muted)]'
-                      : 'bg-[var(--surface-main)]/85 backdrop-blur-md border-[var(--border-divider)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+          {/* Schedule Controls Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 text-xs">
+              {(['all', 'pending', 'completed'] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setTaskStatusFilter(status)}
+                  className={`px-3 py-1.5 rounded-lg capitalize font-medium border transition-colors cursor-pointer ${
+                    taskStatusFilter === status
+                      ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] border-[var(--accent-blue)] font-semibold'
+                      : 'bg-[var(--surface-main)] text-[var(--text-secondary)] border-[var(--border-divider)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleTask(task.id)}
-                      className="cursor-pointer shrink-0 text-[var(--accent-blue)]"
-                    >
-                      {task.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-[var(--color-green)]" />
-                      ) : (
-                        <Circle className="w-4 h-4 text-[var(--text-muted)]" />
-                      )}
-                    </button>
-                    <span className={`text-xs font-medium ${task.completed ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
-                      {task.title}
-                    </span>
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            <div className="inline-flex rounded-lg border border-[var(--border-divider)] bg-[var(--surface-main)] p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setTaskViewMode('timeline')}
+                className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  taskViewMode === 'timeline'
+                    ? 'bg-[var(--surface-elevated)] text-[var(--text-primary)] font-semibold'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
+                <span>Schedule Timeline</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaskViewMode('board')}
+                className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  taskViewMode === 'board'
+                    ? 'bg-[var(--surface-elevated)] text-[var(--text-primary)] font-semibold'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Columns3 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+                <span>Priority Board</span>
+              </button>
+            </div>
+          </div>
+
+          {visibleTasks.length === 0 ? (
+            <div className="p-8 text-center bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)]">
+              {currentProject.tasks.length === 0
+                ? 'No tasks added yet. Add study goals above to build your schedule.'
+                : 'No tasks match this filter.'}
+            </div>
+          ) : taskViewMode === 'timeline' ? (
+            <div className="space-y-4">
+              {scheduledTasks.length > 0 && (
+                <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 bg-[var(--surface-elevated)] border-b border-[var(--border-divider)] flex items-center justify-between text-xs">
+                    <span className="font-semibold text-[var(--text-primary)]">Scheduled &amp; Upcoming</span>
+                    <span className="text-[var(--text-muted)] tabular-nums">{scheduledTasks.length} items</span>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-mono uppercase ${
-                        task.priority === 'high'
-                          ? 'bg-[var(--accent-red-bg)] text-[var(--color-red)]'
-                          : task.priority === 'medium'
-                          ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)]'
-                          : 'bg-[var(--surface-elevated)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {task.priority}
-                    </span>
-
-                    {task.dueDate && (
-                      <span className="text-[10px] text-[var(--text-muted)] font-mono hidden sm:inline">
-                        {task.dueDate}
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTask(task.id)}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
-                      title="Delete task"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                  <div className="divide-y divide-[var(--border-divider)]">
+                    {scheduledTasks.map(renderTimelineRow)}
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              )}
+
+              {flexibleTasks.length > 0 && (
+                <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 bg-[var(--surface-elevated)] border-b border-[var(--border-divider)] flex items-center justify-between text-xs">
+                    <span className="font-semibold text-[var(--text-primary)]">Flexible / Any Time</span>
+                    <span className="text-[var(--text-muted)] tabular-nums">{flexibleTasks.length} items</span>
+                  </div>
+                  <div className="divide-y divide-[var(--border-divider)]">
+                    {flexibleTasks.map(renderTimelineRow)}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {([
+                { key: 'high' as const, label: 'High Priority', accent: 'text-[var(--color-red)]' },
+                { key: 'medium' as const, label: 'Medium Priority', accent: 'text-[var(--accent-blue)]' },
+                { key: 'low' as const, label: 'Low Priority', accent: 'text-[var(--text-muted)]' },
+              ]).map((lane) => {
+                const laneTasks = visibleTasks.filter((t) => t.priority === lane.key);
+                return (
+                  <div
+                    key={lane.key}
+                    className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl overflow-hidden flex flex-col"
+                  >
+                    <div className="px-4 py-2.5 bg-[var(--surface-elevated)] border-b border-[var(--border-divider)] flex items-center justify-between">
+                      <span className={`text-xs font-semibold ${lane.accent}`}>{lane.label}</span>
+                      <span className="text-xs font-mono tabular-nums text-[var(--text-muted)]">{laneTasks.length}</span>
+                    </div>
+                    {laneTasks.length === 0 ? (
+                      <div className="p-5 text-center text-xs text-[var(--text-muted)]">
+                        No {lane.key} priority tasks
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--border-divider)]">
+                        {laneTasks.map((task) => (
+                          <div key={task.id} className="p-3.5 flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTask(task.id)}
+                                className="mt-0.5 cursor-pointer shrink-0"
+                                aria-label={task.completed ? `Mark "${task.title}" incomplete` : `Mark "${task.title}" complete`}
+                              >
+                                {task.completed ? (
+                                  <CheckCircle2 className="w-4 h-4 text-[var(--accent-mint)]" />
+                                ) : (
+                                  <Circle className="w-4 h-4 text-[var(--text-muted)] hover:text-[var(--accent-blue)]" />
+                                )}
+                              </button>
+                              <div className="min-w-0 space-y-1">
+                                <div
+                                  className={`text-xs font-medium leading-snug ${
+                                    task.completed ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'
+                                  }`}
+                                >
+                                  {task.title}
+                                </div>
+                                {task.dueDate && (
+                                  <div className="text-[11px] font-mono tabular-nums text-[var(--text-muted)]">
+                                    Due {task.dueDate}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="p-1 text-[var(--text-muted)] hover:text-[var(--color-red)] cursor-pointer shrink-0"
+                              title="Delete task"
+                              aria-label="Delete task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
       {/* TAB 2: Attached Past Papers */}
       {activeTab === 'papers' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-[var(--text-secondary)]">
               Previous year question papers attached specifically to this study project.
             </p>
             <button
               type="button"
               onClick={onAttachMorePapers}
-              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
+              className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>Browse & Attach</span>
+              <FolderPlus className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
+              <span>Browse &amp; Attach</span>
             </button>
           </div>
 
           {attachedPapers.length === 0 ? (
-            <div className="p-10 text-center bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl space-y-3">
+            <div className="p-10 text-center bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl space-y-3">
               <FileText className="w-7 h-7 text-[var(--text-muted)] mx-auto" />
               <div className="text-sm font-semibold text-[var(--text-primary)]">No papers attached yet</div>
               <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
-                Explore the public Studify PYQ library and click "Add to Project" on any paper to attach it here.
+                Explore the Studify library and click Add to Project on any paper to link it here.
               </p>
               <button
                 type="button"
                 onClick={onAttachMorePapers}
-                className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg cursor-pointer btn-quad-border"
+                className="min-h-[38px] px-4 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg cursor-pointer hover:opacity-90"
               >
                 Explore PYQ Library
               </button>
@@ -571,15 +740,15 @@ Generated from Studify Student Workspace.
               {attachedPapers.map((paper) => (
                 <div
                   key={paper.id}
-                  className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] hover:border-[var(--border-hover)] transition-all flex flex-col justify-between space-y-3 shadow-xs"
+                  className="p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] hover:border-[var(--border-hover)] transition-colors flex flex-col justify-between space-y-3"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                      <span className="font-semibold text-[var(--accent-blue)]">{paper.examBoard} · {paper.grade}</span>
-                      <span className="font-mono text-[var(--text-muted)]">{paper.year}</span>
+                      <span className="font-semibold text-[var(--accent-mint)]">{paper.examBoard} · {paper.grade}</span>
+                      <span className="font-mono tabular-nums text-[var(--text-muted)]">{paper.year}</span>
                     </div>
                     <h3 className="text-sm font-semibold text-[var(--text-primary)] line-clamp-1">{paper.title}</h3>
-                    <p className="text-xs text-[var(--text-muted)] line-clamp-1">{paper.totalMarks} Marks · {paper.subject}</p>
+                    <p className="text-xs text-[var(--text-muted)] line-clamp-1 tabular-nums">{paper.totalMarks} Marks · {paper.subject}</p>
                   </div>
 
                   <div className="pt-2.5 border-t border-[var(--border-divider)] flex items-center justify-between gap-2">
@@ -587,7 +756,7 @@ Generated from Studify Student Workspace.
                       <button
                         type="button"
                         onClick={() => onSelectPaper(paper)}
-                        className="px-2.5 py-1 bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors cursor-pointer btn-quad-border"
+                        className="px-3 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg flex items-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>View</span>
@@ -596,8 +765,9 @@ Generated from Studify Student Workspace.
                         <button
                           type="button"
                           onClick={(e) => onDownloadPaper(paper, e)}
-                          className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer btn-quad-border"
+                          className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-divider)] transition-colors cursor-pointer"
                           title="Download Paper"
+                          aria-label="Download Paper"
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
@@ -620,12 +790,12 @@ Generated from Studify Student Workspace.
         </div>
       )}
 
-      {/* TAB 3: Study Notes, Uploaded PDFs/Photos & Quick Captures */}
+      {/* TAB 3: Flat Study Notes, Backed-Up PDFs/Photos & Quick Captures */}
       {activeTab === 'notes' && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-[var(--text-secondary)]">
-              Your dedicated project notes, backed-up PDFs &amp; handwritten photos, and quick captures.
+              Dedicated project notes, backed-up PDFs &amp; handwritten photos, and quick captures.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -635,7 +805,7 @@ Generated from Studify Student Workspace.
                   setScannerMode('camera');
                   setScannerOpen(true);
                 }}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Camera className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                 <span>Take Photo</span>
@@ -647,7 +817,7 @@ Generated from Studify Student Workspace.
                   setScannerMode('upload');
                   setScannerOpen(true);
                 }}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <UploadCloud className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                 <span>Upload PDF / Photos</span>
@@ -656,9 +826,9 @@ Generated from Studify Student Workspace.
                 <button
                   type="button"
                   onClick={() => onOpenQuickCapture(currentProject.id)}
-                  className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--accent-yellow-bg)] hover:opacity-90 text-[var(--color-yellow)] border border-[var(--color-yellow)]/30 text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
+                  className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
                 >
-                  <Zap className="w-3.5 h-3.5" />
+                  <Zap className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
                   <span>Quick Capture</span>
                 </button>
               )}
@@ -668,7 +838,7 @@ Generated from Studify Student Workspace.
                   setNoteError(null);
                   setIsAddingNote(!isAddingNote);
                 }}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border whitespace-nowrap"
+                className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>{isAddingNote ? 'Cancel' : 'New Note'}</span>
@@ -684,7 +854,7 @@ Generated from Studify Student Workspace.
           )}
 
           {isAddingNote && (
-            <form onSubmit={handleSaveNote} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3 shadow-xs">
+            <form onSubmit={handleSaveNote} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] space-y-3">
               <div className="text-xs font-semibold text-[var(--text-primary)]">Create Study Note</div>
               {noteError && (
                 <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-xs text-[var(--color-red)] flex items-start gap-2">
@@ -717,14 +887,14 @@ Generated from Studify Student Workspace.
                     setNoteError(null);
                   }}
                   disabled={isSavingNote}
-                  className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer btn-quad-border"
+                  className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingNote || !noteContent.trim()}
-                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer btn-quad-border flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isSavingNote ? (
                     <>
@@ -742,11 +912,13 @@ Generated from Studify Student Workspace.
           {currentProject.notes.length === 0 &&
           (currentProject.noteAttachments || []).length === 0 &&
           projectCaptures.length === 0 ? (
-            <div className="p-8 text-center bg-[var(--surface-main)]/85 border border-[var(--border-divider)] rounded-xl space-y-2.5">
+            <div className="p-8 text-center bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl space-y-2.5">
               <FileText className="w-6 h-6 text-[var(--text-muted)] mx-auto" />
-              <div className="text-xs font-semibold text-[var(--text-primary)]">No notes, PDFs, or note photos in this project yet</div>
+              <div className="text-xs font-semibold text-[var(--text-primary)]">
+                No notes, PDFs, or note photos in this project yet
+              </div>
               <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto">
-                Click New Note to write study sheets, Take Photo to snap handwritten pages, or Upload PDF / Photos so your notes never get lost.
+                Click New Note to write study sheets, Take Photo to snap handwritten pages, or Upload PDF / Photos so your notes stay backed up.
               </p>
             </div>
           ) : (
@@ -764,11 +936,11 @@ Generated from Studify Student Workspace.
                       return (
                         <div
                           key={att.id}
-                          className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3"
+                          className="p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] space-y-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-start gap-2.5 min-w-0">
-                              <div className="w-9 h-9 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
+                              <div className="w-9 h-9 rounded-lg bg-[var(--surface-elevated)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
                                 {isPdf ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                               </div>
                               <div className="min-w-0">
@@ -787,7 +959,7 @@ Generated from Studify Student Workspace.
                                   <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
                                     {isCloudSynced ? (
                                       <>
-                                        <Cloud className="w-3 h-3 text-[var(--accent-blue)]" />
+                                        <Cloud className="w-3 h-3 text-[var(--accent-mint)]" />
                                         <span>Saved in Cloud</span>
                                       </>
                                     ) : (
@@ -838,7 +1010,7 @@ Generated from Studify Student Workspace.
                                 type="button"
                                 onClick={() => handleDownloadAttachment(att)}
                                 disabled={downloadingAttachmentId === att.id}
-                                className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:opacity-90 text-xs font-semibold text-[var(--accent-blue)] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
+                                className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-xs font-semibold text-white dark:text-[#0A2640] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
                               >
                                 {downloadingAttachmentId === att.id ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -855,38 +1027,35 @@ Generated from Studify Student Workspace.
                   </div>
                 </div>
               )}
+
               {currentProject.notes.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl divide-y divide-[var(--border-divider)]">
                   {currentProject.notes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-2.5 shadow-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          {note.isPinned && <Pin className="w-3.5 h-3.5 text-[var(--accent-blue)] fill-current" />}
-                          <h4 className="text-sm font-semibold text-[var(--text-primary)]">{note.title}</h4>
+                    <div key={note.id} className="p-4 sm:p-5 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {note.isPinned && <Pin className="w-3.5 h-3.5 text-[var(--accent-mint)] shrink-0" />}
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate">{note.title}</h4>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteNote(note.id)}
-                          className="text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
+                          className="text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer p-1"
                           title="Delete note"
+                          aria-label="Delete note"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      <div className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed bg-[var(--surface-secondary)]/50 p-2.5 rounded-lg border border-[var(--border-divider)]">
+                      <div className="text-xs sm:text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
                         {note.content}
                       </div>
 
                       {note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1">
+                        <div className="flex flex-wrap gap-2 pt-1 text-[11px] text-[var(--text-muted)]">
                           {note.tags.map((t) => (
-                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
-                              #{t}
-                            </span>
+                            <span key={t}>#{t}</span>
                           ))}
                         </div>
                       )}
@@ -897,7 +1066,7 @@ Generated from Studify Student Workspace.
 
               {projectCaptures.length > 0 && (
                 <div className="space-y-3 pt-2">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] tabular-nums">
                     Project Quick Captures ({projectCaptures.length})
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -906,12 +1075,12 @@ Generated from Studify Student Workspace.
                         key={cap.id}
                         className={`p-3.5 rounded-xl border transition-colors space-y-2 ${
                           cap.isResolved
-                            ? 'bg-[var(--surface-secondary)]/40 border-[var(--border-divider)] opacity-65'
-                            : 'bg-[var(--surface-main)]/85 border-[var(--border-divider)]'
+                            ? 'bg-[var(--surface-elevated)] border-[var(--border-divider)] opacity-65'
+                            : 'bg-[var(--surface-main)] border-[var(--border-divider)]'
                         }`}
                       >
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-mono uppercase text-[var(--color-yellow)] font-semibold">
+                          <span className="font-mono uppercase text-[var(--accent-mint)] font-semibold">
                             {cap.type}
                           </span>
                           <span className="font-mono tabular-nums text-[var(--text-muted)]">
@@ -928,9 +1097,9 @@ Generated from Studify Student Workspace.
                           <button
                             type="button"
                             onClick={() => handleToggleResolveCapture(cap.id)}
-                            className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] hover:underline cursor-pointer"
+                            className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] font-medium hover:underline cursor-pointer"
                           >
-                            <CheckCircle2 className={`w-3.5 h-3.5 ${cap.isResolved ? 'text-[var(--color-green)]' : ''}`} />
+                            <CheckCircle2 className={`w-3.5 h-3.5 ${cap.isResolved ? 'text-[var(--accent-mint)]' : ''}`} />
                             <span>{cap.isResolved ? 'Completed' : 'Mark Resolved'}</span>
                           </button>
                           <button
@@ -938,6 +1107,7 @@ Generated from Studify Student Workspace.
                             onClick={() => handleDeleteCapture(cap.id)}
                             className="text-[var(--text-muted)] hover:text-[var(--color-red)] p-1 transition-colors cursor-pointer"
                             title="Delete capture"
+                            aria-label="Delete capture"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -955,22 +1125,22 @@ Generated from Studify Student Workspace.
       {/* TAB 4: Resources & Links */}
       {activeTab === 'resources' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-[var(--text-secondary)]">
               Reference materials, textbooks, videos, and external links.
             </p>
             <button
               type="button"
               onClick={() => setIsAddingResource(!isAddingResource)}
-              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border"
+              className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
               <span>{isAddingResource ? 'Cancel' : 'Add Resource'}</span>
             </button>
           </div>
 
           {isAddingResource && (
-            <form onSubmit={handleAddResource} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] space-y-3 shadow-xs">
+            <form onSubmit={handleAddResource} className="p-4 sm:p-5 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] space-y-3">
               <div className="text-xs font-semibold text-[var(--text-primary)]">Add Study Resource</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
@@ -983,7 +1153,7 @@ Generated from Studify Student Workspace.
                 />
                 <select
                   value={resType}
-                  onChange={(e) => setResType(e.target.value as any)}
+                  onChange={(e) => setResType(e.target.value as 'link' | 'video' | 'doc' | 'book')}
                   className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none"
                 >
                   <option value="link">Web Link</option>
@@ -1014,13 +1184,13 @@ Generated from Studify Student Workspace.
                 <button
                   type="button"
                   onClick={() => setIsAddingResource(false)}
-                  className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer btn-quad-border"
+                  className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer btn-quad-border"
+                  className="px-4 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Save Resource
                 </button>
@@ -1031,46 +1201,48 @@ Generated from Studify Student Workspace.
           <div className="space-y-2">
             {currentProject.resources.length === 0 ? (
               <div className="p-8 text-center bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)]">
-                No external resources added yet. Add YouTube lectures, NCERT links, or Drive folders.
+                No external resources added yet. Add YouTube lectures, NCERT links, or study references.
               </div>
             ) : (
-              currentProject.resources.map((res) => (
-                <div
-                  key={res.id}
-                  className="p-3 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] flex items-center justify-between gap-3 hover:border-[var(--border-hover)] transition-colors shadow-xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-lg bg-[var(--surface-elevated)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
-                      {res.type === 'video' ? <Video className="w-3.5 h-3.5" /> : res.type === 'book' ? <Book className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+              <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl divide-y divide-[var(--border-divider)]">
+                {currentProject.resources.map((res) => (
+                  <div
+                    key={res.id}
+                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-[var(--surface-elevated)]/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-[var(--surface-elevated)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
+                        {res.type === 'video' ? <Video className="w-3.5 h-3.5" /> : res.type === 'book' ? <Book className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{res.title}</div>
+                        {res.notes && <div className="text-[11px] text-[var(--text-muted)] truncate">{res.notes}</div>}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{res.title}</div>
-                      {res.notes && <div className="text-[11px] text-[var(--text-muted)] truncate">{res.notes}</div>}
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <a
-                      href={res.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-medium text-[var(--accent-blue)] flex items-center gap-1 transition-colors btn-quad-border"
-                    >
-                      <span>Open</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteResource(res.id)}
-                      className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
-                      title="Delete resource"
-                      aria-label="Delete resource"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={res.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-primary)] flex items-center gap-1 transition-colors"
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="w-3 h-3 text-[var(--accent-blue)]" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteResource(res.id)}
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
+                        title="Delete resource"
+                        aria-label="Delete resource"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>

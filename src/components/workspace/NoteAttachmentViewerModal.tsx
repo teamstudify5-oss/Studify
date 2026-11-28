@@ -134,7 +134,7 @@ export const NoteAttachmentViewerModal: React.FC<NoteAttachmentViewerModalProps>
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: 'var(--modal-backdrop)' }}
       onClick={onClose}
     >
@@ -149,7 +149,7 @@ export const NoteAttachmentViewerModal: React.FC<NoteAttachmentViewerModalProps>
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-[var(--border-divider)] flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 id="note-viewer-title" className="text-sm sm:text-base font-bold truncate">
+            <h3 id="note-viewer-title" className="font-display text-sm sm:text-base font-bold truncate">
               {attachment.title}
             </h3>
             {currentPage && (
@@ -165,7 +165,7 @@ export const NoteAttachmentViewerModal: React.FC<NoteAttachmentViewerModalProps>
               type="button"
               onClick={handleDownloadCurrent}
               disabled={!currentPage}
-              className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-40"
+              className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-40"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download</span>

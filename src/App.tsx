@@ -35,6 +35,10 @@ function MainApp() {
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [browseFilters, setBrowseFilters] = useState<Partial<FilterState> & { search?: string }>({});
   const [papers, setPapers] = useState<Paper[]>([]);
+  const [papersLoading, setPapersLoading] = useState<boolean>(true);
+  const [papersError, setPapersError] = useState<string | null>(null);
+  const papersSeqRef = useRef<number>(0);
+  const papersErrorRef = useRef<string | null>(null);
   const [savedPaperIds, setSavedPaperIds] = useState<string[]>([]);
   const [isLoginRequiredOpen, setIsLoginRequiredOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -45,6 +49,10 @@ function MainApp() {
   useEffect(() => {
     currentTabRef.current = currentTab;
   }, [currentTab]);
+
+  useEffect(() => {
+    papersErrorRef.current = papersError;
+  }, [papersError]);
 
   // Student Workspace & Command Center State
   const [isCommandCenterOpen, setIsCommandCenterOpen] = useState<boolean>(false);
@@ -72,7 +80,68 @@ function MainApp() {
     }
   }, [isAuthenticated, currentUser?.id]);
 
-  // Authoritatively hydrate PYQ library, bookmarks, and workspace references
+  const refreshAuthoritativePapers = async (opts?: { showLoading?: boolean }) => {
+    const seq = ++papersSeqRef.current;
+    if (opts?.showLoading) {
+      setPapersLoading(true);
+    }
+    setPapersError(null);
+
+    const papersRes = await storageService.fetchPapersFromSupabaseWithStatus();
+    if (seq !== papersSeqRef.current) return null;
+
+    if (papersRes.synced) {
+      setPapers(papersRes.papers);
+      setPapersError(null);
+      setPapersLoading(false);
+
+      const validIds = new Set(papersRes.papers.map((p) => p.id));
+      setSelectedPaper((prev) => {
+        if (!prev) return null;
+        if (!validIds.has(prev.id)) {
+          return currentTabRef.current === 'paper-details' ? prev : null;
+        }
+        return papersRes.papers.find((p) => p.id === prev.id) || prev;
+      });
+      return papersRes;
+    }
+
+    setPapersLoading(false);
+    const errMsg = papersRes.error?.message || 'Could not load Community PYQs from Supabase.';
+    setPapersError(errMsg);
+    // Keep any empty state clean on failed authoritative sync
+    setPapers((prev) => (prev.length > 0 ? prev : []));
+    return papersRes;
+  };
+
+  // Start loading the public PYQ library immediately on mount (do not wait for authReady)
+  useEffect(() => {
+    let active = true;
+    const initPublicFeed = async () => {
+      const res = await refreshAuthoritativePapers({ showLoading: true });
+      if (!active || !res) return;
+      if (!res.synced && res.error) {
+        console.error('Failed to load Community PYQs from Supabase:', res.error.message);
+      }
+    };
+    void initPublicFeed();
+
+    const handleReconnectRetry = () => {
+      if (papersErrorRef.current && (typeof document === 'undefined' || document.visibilityState === 'visible')) {
+        void refreshAuthoritativePapers({ showLoading: true });
+      }
+    };
+    window.addEventListener('online', handleReconnectRetry);
+    document.addEventListener('visibilitychange', handleReconnectRetry);
+
+    return () => {
+      active = false;
+      window.removeEventListener('online', handleReconnectRetry);
+      document.removeEventListener('visibilitychange', handleReconnectRetry);
+    };
+  }, []);
+
+  // Authoritatively hydrate user-scoped PYQ library, bookmarks, and workspace references
   // once auth session hydration is ready AND whenever authentication state or user changes.
   useEffect(() => {
     if (!authReady) return;
@@ -87,31 +156,15 @@ function MainApp() {
       }
 
       const [papersRes, savedRes] = await Promise.all([
-        storageService.fetchPapersFromSupabaseWithStatus(),
+        refreshAuthoritativePapers({ showLoading: storageService.getPapers().length === 0 }),
         storageService.fetchSavedPaperIdsFromSupabaseWithStatus(),
       ]);
 
       if (!active) return;
 
-      if (papersRes.synced) {
-        setPapers(papersRes.papers);
+      setSavedPaperIds(savedRes.synced ? savedRes.ids : []);
 
-        const validIds = new Set(papersRes.papers.map((p) => p.id));
-
-        // Refresh selectedPaper from authoritative feed, but keep it intact when viewing
-        // paper-details so PaperDetailsPage can render the official removal notice if unpublished.
-        setSelectedPaper((prev) => {
-          if (!prev) return null;
-          if (!validIds.has(prev.id)) {
-            return currentTabRef.current === 'paper-details' ? prev : null;
-          }
-          return papersRes.papers.find((p) => p.id === prev.id) || prev;
-        });
-
-        // Sync bookmarks and workspace projects without deleting references to
-        // papers that may simply be pending, rejected, or unpublished.
-        setSavedPaperIds(savedRes.synced ? savedRes.ids : []);
-
+      if (papersRes?.synced) {
         if (isAuthenticated && currentUser?.id) {
           await workspaceService.syncGuestItemsToSupabaseIfAny();
           const wsRes = await workspaceService.fetchFromSupabase();
@@ -119,14 +172,9 @@ function MainApp() {
             window.dispatchEvent(new CustomEvent('studify:workspace-updated'));
           }
         }
-      } else {
-        // Never silently display stale local papers when Supabase sync fails
-        setPapers([]);
-        setSavedPaperIds(savedRes.synced ? savedRes.ids : []);
-        if (papersRes.error) {
-          console.error('Failed to load Community PYQs from Supabase:', papersRes.error.message);
-          showToast(papersRes.error.message || 'Could not load Community PYQs from Supabase.', 'error');
-        }
+      } else if (papersRes?.error) {
+        console.error('Failed to load Community PYQs from Supabase:', papersRes.error.message);
+        showToast(papersRes.error.message || 'Could not load Community PYQs from Supabase.', 'error');
       }
     };
 
@@ -141,6 +189,7 @@ function MainApp() {
     const handleCachesCleared = () => {
       storageService.clearInMemoryState();
       setPapers([]);
+      setPapersLoading(true);
       setSavedPaperIds([]);
       setSelectedPaper(null);
       downloadQuotaService.getQuota().then(setDownloadQuota);
@@ -430,6 +479,9 @@ function MainApp() {
         {currentTab === 'home' && (
           <LandingPage
             samplePapers={papers}
+            isLoadingPapers={papersLoading}
+            papersError={papersError}
+            onRetryLoadPapers={() => void refreshAuthoritativePapers({ showLoading: true })}
             onNavigateToSearch={() => {
               setCurrentTab('browse');
               window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -454,6 +506,9 @@ function MainApp() {
         {currentTab === 'browse' && (
           <BrowsePage
             papers={papers}
+            isLoadingPapers={papersLoading}
+            papersError={papersError}
+            onRetryLoadPapers={() => void refreshAuthoritativePapers({ showLoading: true })}
             initialFilters={browseFilters}
             onSelectPaper={handleSelectPaper}
             onDownloadPaper={handleDownloadPaper}

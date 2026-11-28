@@ -22,16 +22,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <button
           type="button"
           onClick={onNavigateToHome}
-          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--accent-blue)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-main)] border border-[var(--border-divider)]"
         >
-          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
           <span>Back to Studify</span>
         </button>
 
         <button
           type="button"
           onClick={onNavigateToBrowse}
-          className="text-xs text-[var(--accent-blue)] hover:underline transition-colors cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+          className="text-xs font-medium text-[var(--accent-blue)] hover:underline transition-colors cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-main)] border border-[var(--border-divider)]"
         >
           Explore Library
         </button>

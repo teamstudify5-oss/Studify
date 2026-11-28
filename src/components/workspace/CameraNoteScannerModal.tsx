@@ -322,7 +322,7 @@ export const CameraNoteScannerModal: React.FC<CameraNoteScannerModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: 'var(--modal-backdrop)' }}
       onClick={() => {
         if (!isSaving) onClose();
@@ -341,7 +341,7 @@ export const CameraNoteScannerModal: React.FC<CameraNoteScannerModalProps> = ({
           <div className="min-w-0">
             <h3
               id="note-attachment-modal-title"
-              className="text-base font-bold text-[var(--text-primary)] truncate"
+              className="font-display text-base font-bold text-[var(--text-primary)] truncate"
             >
               Back Up Notes to {projectTitle}
             </h3>
@@ -473,7 +473,7 @@ export const CameraNoteScannerModal: React.FC<CameraNoteScannerModalProps> = ({
                     type="button"
                     onClick={handleCaptureFromVideo}
                     disabled={isSaving || stagedFiles.length >= 12}
-                    className="flex-1 min-h-[44px] px-4 py-2.5 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-opacity cursor-pointer disabled:opacity-40 whitespace-nowrap"
+                    className="flex-1 min-h-[44px] px-4 py-2.5 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold flex items-center justify-center gap-2 transition-opacity cursor-pointer disabled:opacity-40 whitespace-nowrap"
                   >
                     <Camera className="w-4 h-4" />
                     <span>Capture Page ({stagedFiles.length}/12)</span>
@@ -512,7 +512,7 @@ export const CameraNoteScannerModal: React.FC<CameraNoteScannerModalProps> = ({
                 e.preventDefault();
                 if (e.dataTransfer.files) appendFiles(e.dataTransfer.files);
               }}
-              className="rounded-xl border border-dashed border-[var(--border-hover)] bg-[var(--surface-secondary)]/55 p-6 text-center space-y-3"
+              className="rounded-xl border border-dashed border-[var(--border-hover)] bg-[var(--surface-elevated)] p-6 text-center space-y-3"
             >
               <UploadCloud className="w-7 h-7 text-[var(--accent-blue)] mx-auto" />
               <div className="space-y-1">
@@ -642,7 +642,7 @@ export const CameraNoteScannerModal: React.FC<CameraNoteScannerModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isSaving || stagedFiles.length === 0}
-            className="min-h-[40px] px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-2 transition-opacity cursor-pointer disabled:opacity-40 whitespace-nowrap"
+            className="min-h-[40px] px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold flex items-center gap-2 transition-opacity cursor-pointer disabled:opacity-40 whitespace-nowrap"
           >
             {isSaving ? (
               <>

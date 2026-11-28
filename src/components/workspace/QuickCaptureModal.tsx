@@ -61,7 +61,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
     return () => window.removeEventListener('studify:workspace-updated', handleWorkspaceUpdated);
   }, []);
 
-  // Manage accessibility focus & escape key
   useEffect(() => {
     if (isOpen) {
       triggerElementRef.current = document.activeElement as HTMLElement;
@@ -159,7 +158,8 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-sm animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--modal-backdrop)' }}
       onClick={() => !isSaving && onClose()}
       role="presentation"
     >
@@ -168,17 +168,17 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-capture-title"
-        className="w-full max-w-lg bg-[var(--modal-bg)] backdrop-blur-md border border-[var(--border-divider)] rounded-2xl shadow-2xl overflow-hidden flex flex-col text-[var(--text-primary)]"
+        className="w-full max-w-lg border border-[var(--border-divider)] rounded-2xl shadow-2xl overflow-hidden flex flex-col text-[var(--text-primary)]"
+        style={{ backgroundColor: 'var(--modal-bg)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="p-4 sm:p-5 border-b border-[var(--border-divider)] bg-[var(--surface-elevated)] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] border border-[var(--color-yellow)]/30 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[var(--surface-main)] text-[var(--accent-mint)] border border-[var(--border-divider)] flex items-center justify-center">
               <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h3 id="quick-capture-title" className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
+              <h3 id="quick-capture-title" className="font-display text-sm sm:text-base font-bold text-[var(--text-primary)]">
                 Quick Capture
               </h3>
               <p className="text-[11px] text-[var(--text-secondary)]">
@@ -189,7 +189,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           <button
             type="button"
             onClick={() => !isSaving && onClose()}
-            className="w-8 h-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] flex items-center justify-center transition-colors cursor-pointer btn-quad-border"
+            className="w-8 h-8 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
@@ -224,7 +224,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     onClose();
                     onRequestCreateProject();
                   }}
-                  className="px-4 py-2 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 cursor-pointer"
+                  className="px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg hover:opacity-90 cursor-pointer"
                 >
                   Create Project
                 </button>
@@ -240,7 +240,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               </div>
             )}
 
-            {/* Capture Type Selector */}
             <div className="grid grid-cols-4 gap-2">
               {[
                 { id: 'thought' as const, label: 'Thought', icon: Sparkles },
@@ -255,10 +254,10 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     type="button"
                     key={item.id}
                     onClick={() => setType(item.id)}
-                    className={`btn-quad-border py-2 px-2 rounded-xl text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`py-2 px-2 rounded-xl text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-colors cursor-pointer border ${
                       isSelected
-                        ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/40 shadow-xs'
-                        : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)]'
+                        ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] border-[var(--accent-blue)]'
+                        : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-divider)]'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -268,7 +267,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               })}
             </div>
 
-            {/* Content / Body - Primary Field */}
             <div>
               <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
                 Note Content *
@@ -283,7 +281,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               />
             </div>
 
-            {/* Title (Optional) */}
             <div>
               <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
                 Title or Headline <span className="text-[10px] text-[var(--text-muted)]">(Optional)</span>
@@ -297,7 +294,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               />
             </div>
 
-            {/* Project & Tag row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
@@ -338,7 +334,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   <button
                     type="button"
                     onClick={handleAddTag}
-                    className="btn-quad-border px-3 py-2 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-semibold text-[var(--text-primary)] rounded-lg cursor-pointer"
+                    className="px-3 py-2 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-semibold text-[var(--text-primary)] rounded-lg cursor-pointer"
                   >
                     Add
                   </button>
@@ -346,19 +342,15 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               </div>
             </div>
 
-            {/* Rendered Tags */}
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-2 pt-1 text-[11px] text-[var(--accent-blue)]">
                 {tags.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--accent-blue)] text-[10px]"
-                  >
-                    #{t}
+                  <span key={t} className="inline-flex items-center gap-1">
+                    <span>#{t}</span>
                     <button
                       type="button"
                       onClick={() => handleRemoveTag(t)}
-                      className="hover:text-[var(--text-primary)] cursor-pointer ml-1"
+                      className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                       aria-label={`Remove tag ${t}`}
                     >
                       ×
@@ -368,7 +360,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               </div>
             )}
 
-            {/* Footer Actions */}
             <div className="pt-3 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-2">
               {onOpenProjectNotes && selectedProjectId ? (
                 <button
@@ -377,7 +368,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     onClose();
                     onOpenProjectNotes(selectedProjectId);
                   }}
-                  className="text-[11px] font-medium text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] font-semibold text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <FileText className="w-3 h-3" />
                   <span>Open Project Notes →</span>
@@ -393,14 +384,14 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   type="button"
                   onClick={onClose}
                   disabled={isSaving}
-                  className="btn-quad-border px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg cursor-pointer"
+                  className="px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving || !content.trim()}
-                  className="btn-quad-border px-5 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                  className="px-5 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity flex items-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap"
                 >
                   {isSaving ? (
                     <>

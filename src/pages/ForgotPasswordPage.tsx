@@ -55,7 +55,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
       <div className="w-full max-w-sm">
         <button
           onClick={() => (onNavigateToHome ? onNavigateToHome() : onNavigateToLogin())}
-          className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white mb-6 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-6 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to log in</span>
@@ -65,7 +65,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
           {step === 'request' && (
             <>
               <div className="mb-5 space-y-1">
-                <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                   Reset password
                 </h1>
                 <p className="text-xs text-[var(--text-secondary)]">
@@ -107,7 +107,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full mt-2 py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg transition-opacity disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  className="w-full mt-2 py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                 >
                   {isLoading ? (
                     <>
@@ -134,23 +134,23 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
 
           {step === 'success' && (
             <div className="text-center py-4 space-y-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-xl bg-[var(--accent-mint-bg)] border border-[var(--accent-mint)]/25 text-[var(--accent-mint)] flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
 
               <div className="space-y-1.5">
-                <h2 className="text-xl font-semibold text-white">
+                <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
                   Reset link sent
                 </h2>
-                <p className="text-xs sm:text-sm text-neutral-400 max-w-xs mx-auto">
-                  If an account exists for <span className="text-white font-medium">{email}</span>, you will receive an email with instructions to reset your password.
+                <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-xs mx-auto">
+                  If an account exists for <span className="text-[var(--text-primary)] font-medium">{email}</span>, you will receive an email with instructions to reset your password.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => onNavigateToLogin(email)}
-                className="w-full py-2.5 px-4 bg-white hover:bg-neutral-200 text-black text-xs sm:text-sm font-semibold rounded-xl transition-all mt-4 cursor-pointer"
+                className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs sm:text-sm font-semibold rounded-lg transition-opacity mt-4 cursor-pointer"
               >
                 Return to log in
               </button>

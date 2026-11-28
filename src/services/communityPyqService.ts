@@ -444,44 +444,152 @@ export interface CommunityPyqServiceDependencies {
   isCurrentUserAdmin?: () => Promise<boolean>;
   fetchImpl?: typeof fetch;
   tusUploader?: typeof uploadWithTus;
+  retryDelayMs?: number;
+  requestTimeoutMs?: number;
+  usePublicRestFallback?: boolean;
 }
 
 export function createCommunityPyqService(deps?: CommunityPyqServiceDependencies) {
+  const hasInjectedClient = Boolean(deps?.supabaseClient);
   const client = deps?.supabaseClient ?? supabase;
   const checkAdmin = deps?.isCurrentUserAdmin ?? (() => supabaseDb.isCurrentUserAdmin());
   const fetchFn = deps?.fetchImpl ?? fetch;
   const tusUploader = deps?.tusUploader ?? uploadWithTus;
+  const retryDelayMs = deps?.retryDelayMs ?? 350;
+  const requestTimeoutMs = deps?.requestTimeoutMs ?? 10000;
+  const allowPublicRestFallback =
+    deps?.usePublicRestFallback ?? !hasInjectedClient;
+
+  const waitMs = (ms: number) =>
+    ms > 0 ? new Promise<void>((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+
+  const withTimeout = async <T>(promise: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> => {
+    if (timeoutMs <= 0) return await promise;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        Promise.resolve(promise),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
+  const fetchCommunityPyqsViaPublicRest = async (): Promise<{
+    rows: CommunityPyqRow[] | null;
+    error: Error | null;
+  }> => {
+    if (typeof fetchFn !== 'function' || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { rows: null, error: new Error('Public REST fallback unavailable') };
+    }
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer =
+      controller && requestTimeoutMs > 0
+        ? setTimeout(() => controller.abort(), requestTimeoutMs)
+        : undefined;
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/community_pyqs?select=*&order=created_at.desc`;
+      const response = await fetchFn(url, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller?.signal,
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          Accept: 'application/json',
+        },
+      });
+      if (!response.ok) {
+        return {
+          rows: null,
+          error: new Error(`Public PYQ fallback HTTP ${response.status}`),
+        };
+      }
+      const rows = (await response.json()) as CommunityPyqRow[];
+      if (!Array.isArray(rows)) {
+        return { rows: null, error: new Error('Unexpected response format from PYQ repository') };
+      }
+      return { rows, error: null };
+    } catch (err: any) {
+      return {
+        rows: null,
+        error: err instanceof Error ? err : new Error(String(err)),
+      };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
 
   return {
     /**
      * Fetch all active Community PYQs with explicit error status so callers can
      * distinguish a genuinely empty library ([]) from a network/database failure.
+     * Automatically retries transient cold-start/JWT errors and falls back to
+     * public anon REST if a stale browser auth session blocks the initial request.
      */
     async fetchCommunityPyqsWithStatus(): Promise<{ papers: Paper[]; error: Error | null }> {
-      try {
-        const { data, error } = await client
-          .from('community_pyqs')
-          .select('*')
-          .order('created_at', { ascending: false });
+      let lastError: Error | null = null;
+      const maxAttempts = 3;
 
-        if (error) {
-          console.warn('communityPyqService.fetchCommunityPyqs error:', error.message);
-          return { papers: [], error: new Error(error.message) };
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const { data, error } = await withTimeout(
+            client
+              .from('community_pyqs')
+              .select('*')
+              .order('created_at', { ascending: false }),
+            requestTimeoutMs,
+            'Loading community PYQs'
+          );
+
+          if (!error) {
+            const all = (data || []).map(mapCommunityRowToPaper);
+            // Exclude removed, taken down, or rejected papers from the public library feed
+            return {
+              papers: all.filter((p) => p.status !== 'removed' && p.status !== 'rejected'),
+              error: null,
+            };
+          }
+
+          lastError = new Error(error.message || 'Could not load community PYQs');
+          console.warn(
+            `communityPyqService.fetchCommunityPyqs attempt ${attempt} error:`,
+            lastError.message
+          );
+        } catch (err: any) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          console.warn(
+            `communityPyqService.fetchCommunityPyqs attempt ${attempt} exception:`,
+            lastError.message
+          );
         }
 
-        const all = (data || []).map(mapCommunityRowToPaper);
-        // Exclude removed, taken down, or rejected papers from the public library feed
-        return {
-          papers: all.filter((p) => p.status !== 'removed' && p.status !== 'rejected'),
-          error: null,
-        };
-      } catch (err: any) {
-        console.warn('Unexpected error in fetchCommunityPyqs:', err);
-        return {
-          papers: [],
-          error: err instanceof Error ? err : new Error(String(err)),
-        };
+        if (attempt < maxAttempts) {
+          await waitMs(retryDelayMs * attempt);
+        }
       }
+
+      if (allowPublicRestFallback) {
+        const restRes = await fetchCommunityPyqsViaPublicRest();
+        if (restRes.rows && !restRes.error) {
+          const all = restRes.rows.map(mapCommunityRowToPaper);
+          return {
+            papers: all.filter((p) => p.status !== 'removed' && p.status !== 'rejected'),
+            error: null,
+          };
+        }
+        if (restRes.error && !lastError) {
+          lastError = restRes.error;
+        }
+      }
+
+      return {
+        papers: [],
+        error: lastError || new Error('Could not load Community PYQs from Supabase.'),
+      };
     },
 
     /**

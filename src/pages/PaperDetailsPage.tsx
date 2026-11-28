@@ -421,25 +421,25 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-main)] border border-[var(--border-divider)]"
         >
           <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
           <span>Back to question papers</span>
         </button>
 
-        <div className="bg-[var(--surface-main)] border border-rose-500/35 rounded-2xl p-6 sm:p-8 space-y-4 shadow-sm animate-in fade-in">
+        <div className="bg-[var(--surface-main)] border border-[var(--color-red)]/35 rounded-2xl p-6 sm:p-8 space-y-4 shadow-xs">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-400">
+            <div className="w-10 h-10 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 flex items-center justify-center shrink-0 text-[var(--color-red)]">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-400">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-red)]">
                 Official Administrator Notice
               </span>
-              <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
+              <h1 className="font-display text-lg sm:text-xl font-bold text-[var(--text-primary)]">
                 {removalNotice?.title || currentPaper.title}
               </h1>
-              <div className="text-xs text-[var(--text-secondary)] flex flex-wrap gap-1.5">
+              <div className="text-xs text-[var(--text-secondary)] flex flex-wrap gap-1.5 tabular-nums">
                 <span>{removalNotice?.examBoard || currentPaper.examBoard}</span>
                 <span>·</span>
                 <span>{removalNotice?.grade || currentPaper.grade}</span>
@@ -451,14 +451,14 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 space-y-1.5 text-xs">
-            <div className="font-semibold text-rose-300">
+          <div className="p-4 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/25 space-y-1.5 text-xs">
+            <div className="font-semibold text-[var(--color-red)]">
               This question paper has been unpublished by an administrator and is no longer available for preview or download.
             </div>
             <div className="text-[var(--text-primary)] whitespace-pre-line">
               <strong>Reason:</strong> {removalNotice?.removalReason || currentPaper.removalReason || 'Removed following moderation review.'}
             </div>
-            <div className="text-[11px] text-[var(--text-muted)] pt-1 flex flex-wrap gap-3">
+            <div className="text-[11px] text-[var(--text-muted)] pt-1 flex flex-wrap gap-3 tabular-nums">
               <span>Action by: {removalNotice?.removedBy || 'Studify Administrator'}</span>
               {(removalNotice?.removedAt || currentPaper.removedAt) && (
                 <span>Date: {new Date((removalNotice?.removedAt || currentPaper.removedAt)!).toLocaleDateString()}</span>
@@ -477,7 +477,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer px-3 py-1.5 rounded-lg bg-[var(--surface-main)] border border-[var(--border-divider)]"
         >
           <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
           <span>Back to question papers</span>
@@ -489,7 +489,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             <button
               type="button"
               onClick={() => setIsEditModalOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer"
               title="Edit this submission"
             >
               <Edit2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
@@ -504,7 +504,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                 setIsDeleteConfirmOpen(true);
               }}
               disabled={isDeleting}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-red-bg)] text-[var(--color-red)] hover:opacity-90 border border-[var(--color-red)]/30 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 btn-quad-border"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-red-bg)] text-[var(--color-red)] hover:opacity-90 border border-[var(--color-red)]/30 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               title="Delete submission permanently"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -517,7 +517,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             <button
               type="button"
               onClick={() => setIsAdminRemoveModalOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-red-bg)] hover:opacity-90 text-[var(--color-red)] border border-[var(--color-red)]/30 transition-opacity flex items-center gap-1.5 cursor-pointer"
               title="Administrator: Remove paper from library with mandatory reason"
             >
               <ShieldAlert className="w-3.5 h-3.5" />
@@ -533,7 +533,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                 setIsRestoreConfirmOpen(true);
               }}
               disabled={isRestoringAdmin}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-blue)] hover:opacity-90 text-white transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               title="Administrator: Restore paper back to published library"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -544,7 +544,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           <button
             type="button"
             onClick={() => setIsReportModalOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--color-red)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--color-red)] transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Report this paper and send removal request to the uploader"
           >
             <ShieldAlert className="w-3.5 h-3.5" />
@@ -554,7 +554,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           <button
             type="button"
             onClick={() => setIsAddToProjectOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Attach to a Study Project"
           >
             <FolderPlus className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
@@ -564,10 +564,10 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           <button
             type="button"
             onClick={(e) => onBookmarkPaper(currentPaper, e)}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer btn-quad-border ${
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               isBookmarked
                 ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30'
-                : 'bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                : 'bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
@@ -578,7 +578,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             type="button"
             disabled={isDownloading}
             onClick={() => onDownloadPaper(currentPaper)}
-            className="px-3 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60 btn-quad-border"
+            className="px-3 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{downloadActionLabel}</span>
@@ -588,7 +588,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
       {/* Inline Deletion Error Banner (shown when dialog is closed) */}
       {deleteError && !isDeleteConfirmOpen && (
-        <div className="p-3.5 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs flex items-center justify-between gap-2 animate-in fade-in">
+        <div className="p-3.5 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs flex items-center justify-between gap-2">
           <span>{deleteError}</span>
           <button
             type="button"
@@ -602,10 +602,10 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
       {/* Moderation Warning Banner for Removed Papers (Admin / Uploader view) */}
       {isPaperRemoved && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+        <div className="p-4 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="space-y-1">
             <div className="font-bold flex items-center gap-2 text-sm">
-              <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+              <ShieldAlert className="w-4 h-4 text-[var(--color-red)] shrink-0" />
               <span>Removed / Unpublished by Administrator</span>
             </div>
             <div className="text-xs text-[var(--text-secondary)] whitespace-pre-line pl-6 font-mono">
@@ -619,7 +619,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                 setAdminRestoreError(null);
                 setIsRestoreConfirmOpen(true);
               }}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-blue)] text-white hover:opacity-90 flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-center"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent-blue)] text-white dark:text-[#0A2640] hover:opacity-90 flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-center"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Restore Paper</span>
@@ -629,9 +629,9 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       )}
 
       {/* Document Header Card */}
-      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-7 space-y-4 shadow-xs">
+      <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-5 sm:p-7 space-y-4 shadow-xs">
         {/* Metadata Strip */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)] tabular-nums">
           <span className="font-semibold text-[var(--accent-blue)]">{currentPaper.examBoard}</span>
           <span className="text-[var(--text-muted)] opacity-60">·</span>
           <span>{currentPaper.grade}</span>
@@ -642,13 +642,13 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           {currentPaper.chapter && (
             <>
               <span className="text-[var(--text-muted)] opacity-60">·</span>
-              <span className="text-[var(--color-green)] font-medium">{currentPaper.chapter}</span>
+              <span className="text-[var(--accent-mint)] font-medium">{currentPaper.chapter}</span>
             </>
           )}
         </div>
 
         {/* Document Title */}
-        <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight leading-snug">
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight leading-snug">
           {currentPaper.title}
         </h1>
 
@@ -657,8 +657,8 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
           {currentPaper.description || `${currentPaper.subject} previous year examination paper with full question structure and official marking scheme.`}
         </p>
 
-        {/* Technical Specs Strip - Strictly conditional, NO assumed marks or duration */}
-        <div className="pt-3 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Technical Specs Strip - Strictly conditional */}
+        <div className="pt-3 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-3 text-xs tabular-nums">
           <div className="flex items-center gap-4 text-[var(--text-secondary)] font-mono text-[11px]">
             {currentPaper.totalMarks && currentPaper.totalMarks > 0 ? (
               <div className="flex items-center gap-1.5">
@@ -668,12 +668,12 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             ) : null}
             {currentPaper.timeAllowedMinutes && currentPaper.timeAllowedMinutes > 0 ? (
               <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-[var(--color-green)]" />
+                <Clock className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
                 <span>{currentPaper.timeAllowedMinutes / 60} Hours</span>
               </div>
             ) : null}
-            <div className="flex items-center gap-1 text-[var(--color-yellow)]">
-              <Star className={`w-3.5 h-3.5 ${currentPaper.rating ? 'fill-current' : 'opacity-40'}`} />
+            <div className="flex items-center gap-1 text-[var(--text-primary)]">
+              <Star className={`w-3.5 h-3.5 text-[var(--color-yellow)] ${currentPaper.rating ? 'fill-current' : 'opacity-40'}`} />
               <span>
                 {currentPaper.rating
                   ? `${currentPaper.rating} (${currentPaper.ratingCount || 1})`
@@ -702,7 +702,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       {/* Embedded Study Workspace Viewer */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">
+          <h2 className="font-display text-base font-semibold text-[var(--text-primary)]">
             Question Paper Preview
           </h2>
           <span className="text-xs text-[var(--text-muted)]">
@@ -718,20 +718,20 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       </div>
 
       {/* SECTION: RATINGS & REVIEWS */}
-      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-5 shadow-xs">
+      <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">
-              Student Ratings & Reviews
+            <h2 className="font-display text-base font-semibold text-[var(--text-primary)]">
+              Student Ratings &amp; Reviews
             </h2>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
               Leave feedback on readability and exam accuracy.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-1.5 rounded-lg border border-[var(--border-divider)]">
-            <div className="flex items-center gap-1 text-[var(--color-yellow)] font-mono text-sm font-semibold">
-              <Star className={`w-3.5 h-3.5 ${currentPaper.rating ? 'fill-current' : 'opacity-50'}`} />
+          <div className="flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-1.5 rounded-lg border border-[var(--border-divider)] tabular-nums">
+            <div className="flex items-center gap-1 text-[var(--text-primary)] font-mono text-sm font-semibold">
+              <Star className={`w-3.5 h-3.5 text-[var(--color-yellow)] ${currentPaper.rating ? 'fill-current' : 'opacity-40'}`} />
               <span>{currentPaper.rating ? currentPaper.rating : '—'}</span>
             </div>
             <span className="text-[var(--text-muted)] opacity-60">·</span>
@@ -744,7 +744,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
         </div>
 
         {/* Submit Review Form */}
-        <form onSubmit={handleReviewSubmit} className="bg-[var(--surface-elevated)]/70 border border-[var(--border-divider)] rounded-xl p-4 space-y-3 text-xs">
+        <form onSubmit={handleReviewSubmit} className="bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-xl p-4 space-y-3 text-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <span className="font-medium text-[var(--text-primary)]">Rate this paper:</span>
             
@@ -755,7 +755,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                   key={s}
                   type="button"
                   onClick={() => setSelectedStars(s)}
-                  className="p-1 hover:scale-110 transition-transform cursor-pointer"
+                  className="p-1 hover:scale-105 transition-transform cursor-pointer"
                   title={`${s} star`}
                 >
                   <Star
@@ -767,7 +767,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                   />
                 </button>
               ))}
-              <span className="ml-2 font-mono text-[var(--color-yellow)] font-semibold">{selectedStars}.0</span>
+              <span className="ml-2 font-mono tabular-nums text-[var(--text-primary)] font-semibold">{selectedStars}.0</span>
             </div>
           </div>
 
@@ -800,7 +800,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
           <div className="flex items-center justify-between pt-1">
             {reviewSubmitted ? (
-              <span className="text-xs text-[var(--color-green)] font-medium flex items-center gap-1">
+              <span className="text-xs text-[var(--accent-mint)] font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Rating recorded! Thank you.</span>
               </span>
@@ -813,7 +813,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             <button
               type="submit"
               disabled={isSubmittingReview}
-              className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer text-xs btn-quad-border"
+              className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer text-xs"
             >
               {isSubmittingReview ? 'Saving...' : hasExistingUserRating ? 'Update Rating' : 'Submit Rating'}
             </button>
@@ -841,13 +841,13 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             currentPaper.reviews.map((r) => (
               <div
                 key={r.id}
-                className="bg-[var(--surface-elevated)]/60 border border-[var(--border-divider)] rounded-lg p-3 text-xs space-y-1"
+                className="bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-lg p-3 text-xs space-y-1"
               >
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
                     <span>{r.authorName}</span>
                     <span className="text-[var(--text-muted)] opacity-60">·</span>
-                    <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                    <span className="text-[11px] font-mono tabular-nums text-[var(--text-muted)]">
                       {new Date(r.createdAt).toLocaleDateString()}
                     </span>
                   </div>
@@ -878,10 +878,10 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       </div>
 
       {/* SECTION: DISCUSSION & COMMENTS */}
-      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 space-y-5 shadow-xs">
+      <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
         <div>
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">
-            Discussion & Questions
+          <h2 className="font-display text-base font-semibold text-[var(--text-primary)]">
+            Discussion &amp; Questions
           </h2>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
             Ask questions about specific solutions, formulas, or tricky problems.
@@ -900,14 +900,14 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             />
             <div className="flex items-center justify-between">
               {commentSubmitted ? (
-                <span className="text-xs text-[var(--color-green)] font-medium">Comment posted!</span>
+                <span className="text-xs text-[var(--accent-mint)] font-medium">Comment posted!</span>
               ) : (
                 <span className="text-[11px] text-[var(--text-muted)]">Posting as {currentUser?.name}</span>
               )}
               <button
                 type="submit"
                 disabled={!commentText.trim()}
-                className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer btn-quad-border"
+                className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Post Comment</span>
@@ -915,16 +915,16 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             </div>
           </form>
         ) : (
-          <div className="bg-[var(--surface-elevated)]/70 border border-[var(--border-divider)] rounded-xl p-5 text-center space-y-2.5">
-            <MessageSquare className="w-6 h-6 text-[var(--accent-blue)] mx-auto opacity-70" />
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Join the Question Discussion</h3>
+          <div className="bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-xl p-5 text-center space-y-2.5">
+            <MessageSquare className="w-6 h-6 text-[var(--accent-blue)] mx-auto opacity-75" />
+            <h3 className="font-display text-sm font-semibold text-[var(--text-primary)]">Join the Question Discussion</h3>
             <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
               Sign in to ask questions, help fellow students with answers, and bookmark papers.
             </p>
             <button
               type="button"
               onClick={onRequireLogin}
-              className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 cursor-pointer btn-quad-border"
+              className="px-4 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 cursor-pointer"
             >
               Sign In to Comment
             </button>
@@ -937,11 +937,11 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
             currentPaper.comments.map((c) => (
               <div
                 key={c.id}
-                className="bg-[var(--surface-elevated)]/60 border border-[var(--border-divider)] rounded-lg p-3 text-xs space-y-1"
+                className="bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-lg p-3 text-xs space-y-1"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-[var(--text-primary)]">{c.authorName}</span>
-                  <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  <span className="text-[11px] font-mono tabular-nums text-[var(--text-muted)]">
                     {new Date(c.createdAt).toLocaleDateString()}
                   </span>
                 </div>
@@ -962,13 +962,13 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
       {relatedPapers.length > 0 && (
         <div className="space-y-4 pt-4 border-t border-[var(--border-divider)]">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+            <h2 className="font-display text-base font-semibold text-[var(--text-primary)]">
               Related {currentPaper.subject} Papers
             </h2>
             <button
               type="button"
               onClick={onBack}
-              className="text-xs text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] btn-quad-border"
+              className="text-xs text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg bg-[var(--surface-main)] border border-[var(--border-divider)]"
             >
               <span>View all</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -1043,11 +1043,11 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
 
       {/* Studify Team Administrator Removal Modal */}
       {isAdminRemoveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)]">
+          <div className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-rose-500" />
+              <h3 className="font-display text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-[var(--color-red)]" />
                 <span>Remove Paper as Administrator</span>
               </h3>
               <button
@@ -1077,12 +1077,12 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                   placeholder="e.g. Copyright infringement / Low scan quality / Inappropriate content"
                   rows={3}
                   required
-                  className="w-full p-2.5 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-rose-500 placeholder-[var(--text-muted)]"
+                  className="w-full p-2.5 text-xs rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--color-red)] placeholder-[var(--text-muted)]"
                 />
               </div>
 
               {adminRemoveError && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                <div className="p-2.5 rounded-lg bg-[var(--accent-red-bg)] border border-[var(--color-red)]/30 text-[var(--color-red)] text-xs">
                   {adminRemoveError}
                 </div>
               )}
@@ -1101,7 +1101,7 @@ export const PaperDetailsPage: React.FC<PaperDetailsPageProps> = ({
                 <button
                   type="submit"
                   disabled={isRemovingAdmin || !adminRemovalReason.trim()}
-                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-xs transition-opacity"
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-red)] text-white hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-xs transition-opacity"
                 >
                   {isRemovingAdmin ? 'Removing...' : 'Confirm Removal'}
                 </button>

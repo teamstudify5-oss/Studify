@@ -181,7 +181,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         <div className="w-12 h-12 bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl flex items-center justify-center mx-auto text-[var(--accent-blue)] shadow-xs">
           <User className="w-6 h-6" />
         </div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-xl font-bold text-[var(--text-primary)]">
           Sign in to view your library
         </h1>
         <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed max-w-sm mx-auto">
@@ -191,7 +191,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           <button
             type="button"
             onClick={() => openAuthModal('login')}
-            className="w-full py-2.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer btn-quad-border"
+            className="w-full py-2.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
           >
             Sign In to Studify
           </button>
@@ -302,7 +302,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     { 
       id: 'removal_requests', 
       label: 'Removal Requests', 
-      icon: <ShieldCheck className="w-4 h-4 text-[var(--color-yellow)]" />, 
+      icon: <ShieldCheck className="w-4 h-4 text-[var(--text-secondary)]" />, 
       badge: pendingRemovalRequests.length,
       badgeColor: pendingRemovalRequests.length > 0 ? 'bg-[var(--accent-red-bg)] text-[var(--color-red)] font-bold' : undefined
     },
@@ -319,16 +319,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             key={item.id}
             type="button"
             onClick={() => setActiveSection(item.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer btn-quad-border ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer ${
               activeSection === item.id
-                ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
-                : 'bg-[var(--surface-main)]/85 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-divider)]'
+                ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold border border-[var(--accent-blue)]/25'
+                : 'bg-[var(--surface-main)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-divider)]'
             }`}
           >
             {item.icon}
             <span>{item.label}</span>
             {item.badge !== undefined && item.badge > 0 && (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-[var(--surface-elevated)] text-[var(--text-primary)] font-mono">
+              <span className="font-mono tabular-nums text-[11px] opacity-80">
                 {item.badge}
               </span>
             )}
@@ -340,7 +340,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         {/* Left Sidebar Rail (Desktop) */}
         <aside className="hidden lg:block lg:col-span-3 sticky top-20 space-y-3">
           {/* User ID Card */}
-          <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-4 shadow-xs space-y-3">
+          <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-4 shadow-xs space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-bold text-sm flex items-center justify-center shrink-0">
                 {currentUser.avatarInitials}
@@ -353,7 +353,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   {currentUser.email}
                 </p>
                 <div className="mt-1 flex items-center gap-1.5">
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-medium uppercase tracking-wider bg-[var(--surface-elevated)] text-[var(--accent-blue)]">
+                  <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-mint)]">
                     {currentUser.role === 'owner' ? 'Owner / Admin' : 'Student'}
                   </span>
                 </div>
@@ -362,13 +362,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           </div>
 
           {/* Sidebar Navigation Rail */}
-          <nav className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-1.5 shadow-xs space-y-1 text-xs">
+          <nav className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-1.5 shadow-xs space-y-1 text-xs">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-medium transition-colors text-left cursor-pointer btn-quad-border ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-medium transition-colors text-left cursor-pointer ${
                   activeSection === item.id
                     ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
@@ -379,8 +379,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <span>{item.label}</span>
                 </div>
                 {item.badge !== undefined && (
-                  <span className={`px-1.5 py-0.2 text-[10px] font-mono rounded ${
-                    activeSection === item.id ? 'bg-[var(--accent-blue)]/20 text-[var(--accent-blue)]' : 'bg-[var(--surface-elevated)] text-[var(--text-muted)]'
+                  <span className={`font-mono tabular-nums text-[11px] ${
+                    activeSection === item.id ? 'text-[var(--accent-blue)] font-semibold' : 'text-[var(--text-muted)]'
                   }`}>
                     {item.badge}
                   </span>
@@ -392,7 +392,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               <button
                 type="button"
                 onClick={logout}
-                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[var(--color-red)] hover:bg-[var(--accent-red-bg)] transition-colors text-xs cursor-pointer btn-quad-border"
+                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[var(--color-red)] hover:bg-[var(--accent-red-bg)] transition-colors text-xs cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Sign Out</span>
@@ -407,7 +407,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           {activeSection === 'overview' && (
             <div className="space-y-6 animate-in fade-in">
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                   Welcome back, {currentUser.name.split(' ')[0]}
                 </h1>
                 <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
@@ -417,7 +417,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
               {/* Pending Removal Requests Banner for Uploader */}
               {pendingRemovalRequests.length > 0 && (
-                <div className="p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--color-yellow)]/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--color-yellow)]/35 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-lg bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] flex items-center justify-center shrink-0">
                       <ShieldCheck className="w-4 h-4" />
@@ -438,7 +438,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </div>
                   <button
                     onClick={() => setActiveSection('removal_requests')}
-                    className="px-3 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg shrink-0 cursor-pointer"
+                    className="px-3 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg shrink-0 cursor-pointer"
                   >
                     Review Requests →
                   </button>
@@ -485,12 +485,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 >
                   <div className="flex items-center justify-between text-[var(--text-secondary)] text-xs">
                     <span>Total Notes</span>
-                    <Star className="w-3.5 h-3.5 text-[var(--color-yellow)]" />
+                    <Star className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
                   </div>
                   <div className="mt-1 text-2xl font-bold text-[var(--text-primary)] font-mono tabular-nums">
                     {totalNotes}
                   </div>
-                  <div className="text-[11px] text-[var(--color-yellow)] hover:underline mt-0.5">
+                  <div className="text-[11px] text-[var(--accent-blue)] hover:underline mt-0.5">
                     View notes →
                   </div>
                 </div>
@@ -522,7 +522,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={onNavigateToBrowse}
-                    className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+                    className="px-3.5 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                   >
                     Explore PYQs
                   </button>
@@ -586,7 +586,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <div className="space-y-5 animate-in fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+                  <h1 className="font-display text-xl font-bold text-[var(--text-primary)] tracking-tight">
                     Bookmarked Papers
                   </h1>
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -625,7 +625,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </p>
                   <button
                     onClick={onNavigateToBrowse}
-                    className="mt-1 px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
+                    className="mt-1 px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
                   >
                     Explore Question Papers
                   </button>
@@ -639,7 +639,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <div className="space-y-5 animate-in fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+                  <h1 className="font-display text-xl font-bold text-[var(--text-primary)] tracking-tight">
                     My Uploaded Papers
                   </h1>
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -649,7 +649,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
                 <button
                   onClick={onNavigateToUpload}
-                  className="px-3 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  className="px-3 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
                   <span>Upload Paper</span>
@@ -714,7 +714,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                             </span>
                           )}
                           {paper.status === 'removed' && (
-                            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--accent-red-bg)] text-[var(--color-red)] border border-[var(--color-red)]/30 flex items-center gap-1">
                               <AlertCircle className="w-3 h-3" />
                               <span>Removed by Administrator</span>
                             </span>
@@ -746,7 +746,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                               setConfirmDeletePaper(paper);
                             }}
                             disabled={deletingUploadId === paper.id}
-                            className="px-2.5 py-1 text-xs font-medium text-[var(--color-red)] bg-[var(--accent-red-bg)] hover:opacity-90 border border-[var(--color-red)]/30 rounded-lg transition-opacity flex items-center gap-1 cursor-pointer disabled:opacity-50 btn-quad-border"
+                            className="px-2.5 py-1 text-xs font-medium text-[var(--color-red)] bg-[var(--accent-red-bg)] hover:opacity-90 border border-[var(--color-red)]/30 rounded-lg transition-opacity flex items-center gap-1 cursor-pointer disabled:opacity-50"
                             title="Delete upload"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -804,13 +804,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                         </div>
                       )}
                       {paper.status === 'removed' && (
-                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/25 rounded-lg text-xs text-rose-300">
+                        <div className="p-2.5 bg-[var(--accent-red-bg)] border border-[var(--color-red)]/25 rounded-lg text-xs text-[var(--color-red)]">
                           <strong>Removed by Administrator:</strong> {paper.removalReason || 'Unpublished following moderation review.'}
                         </div>
                       )}
 
                       {/* Metrics bar */}
-                      <div className="pt-2 border-t border-[var(--border-divider)] flex items-center gap-3 text-xs font-mono text-[var(--text-muted)]">
+                      <div className="pt-2 border-t border-[var(--border-divider)] flex items-center gap-3 text-xs font-mono tabular-nums text-[var(--text-muted)]">
                         <span>{paper.downloadsCount || 0} Downloads</span>
                         <span>·</span>
                         <span>{paper.viewsCount || 0} Views</span>
@@ -833,7 +833,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </p>
                   <button
                     onClick={onNavigateToUpload}
-                    className="mt-1 px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#1C2530] text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
+                    className="mt-1 px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
                   >
                     Upload Your First Paper
                   </button>
@@ -847,7 +847,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <div className="space-y-5 animate-in fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+                  <h1 className="font-display text-xl font-bold text-[var(--text-primary)] tracking-tight">
                     Paper Removal Requests
                   </h1>
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -856,7 +856,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 </div>
                 <div className="px-2.5 py-1 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-xs text-[var(--text-secondary)] flex items-center gap-1.5 self-start sm:self-center">
                   <span>Pending:</span>
-                  <strong className="text-[var(--color-yellow)] font-mono">{pendingRemovalRequests.length}</strong>
+                  <strong className="text-[var(--color-yellow)] font-mono tabular-nums">{pendingRemovalRequests.length}</strong>
                 </div>
               </div>
 
@@ -962,7 +962,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           {activeSection === 'reviews' && (
             <div className="space-y-5 animate-in fade-in">
               <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+                <h1 className="font-display text-xl font-bold text-[var(--text-primary)] tracking-tight">
                   My Reviews & Notes
                 </h1>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -1018,7 +1018,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <button
                     type="button"
                     onClick={onNavigateToBrowse}
-                    className="mt-1 px-4 py-2 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg shadow-xs cursor-pointer btn-quad-border"
+                    className="mt-1 px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
                   >
                     Browse Papers
                   </button>
@@ -1031,7 +1031,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           {activeSection === 'settings' && (
             <div className="space-y-5 animate-in fade-in">
               <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+                <h1 className="font-display text-xl font-bold text-[var(--text-primary)] tracking-tight">
                   Account Settings
                 </h1>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -1040,7 +1040,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               </div>
 
               {/* Profile Card */}
-              <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 shadow-xs space-y-3.5">
+              <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-5 shadow-xs space-y-3.5">
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                   Profile Details
                 </h3>
@@ -1069,7 +1069,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
                   <div>
                     <label className="block text-[var(--text-secondary)] mb-1 font-mono uppercase text-[10px]">Joined Date</label>
-                    <div className="p-2.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] font-mono">
+                    <div className="p-2.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] font-mono tabular-nums">
                       {(() => {
                         const accountCreatedAt = currentUser.createdAt ? new Date(currentUser.createdAt) : null;
                         return accountCreatedAt && Number.isFinite(accountCreatedAt.getTime())
@@ -1086,7 +1086,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               </div>
 
               {/* Sign Out Card */}
-              <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 shadow-xs flex items-center justify-between">
+              <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-5 shadow-xs flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--color-red)]">
                     Sign Out of Studify
@@ -1098,7 +1098,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 <button
                   type="button"
                   onClick={logout}
-                  className="px-3.5 py-1.5 bg-[var(--accent-red-bg)] text-[var(--color-red)] border border-[var(--color-red)]/30 text-xs font-semibold rounded-lg transition-colors cursor-pointer btn-quad-border"
+                  className="px-3.5 py-1.5 bg-[var(--accent-red-bg)] text-[var(--color-red)] border border-[var(--color-red)]/30 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Sign Out
                 </button>

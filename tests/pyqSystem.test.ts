@@ -1943,3 +1943,86 @@ test('Scenario 25: 20261122 SQL migration enforces owner-only reply RPCs and pri
   assert.match(executableSql, /'app-files'/);
   assert.match(executableSql, /CREATE POLICY "App Files Owner Insert"/);
 });
+
+test('Scenario 26: PYQ cold-open fetch retries transient failures and falls back to public anon REST when stale session JWT fails', async () => {
+  const sampleRow = makeSampleRow({ id: 'cold-open-pyq-1', status: 'active' });
+  const removedRow = makeSampleRow({ id: 'cold-open-removed-2', status: 'removed' });
+
+  // 26A: Transient first failure recovers automatically on retry
+  let callsA = 0;
+  const retryClient: any = {
+    from: () => ({
+      select: () => ({
+        order: async () => {
+          callsA += 1;
+          if (callsA === 1) {
+            return { data: null, error: { message: 'Failed to fetch' } };
+          }
+          return { data: [sampleRow, removedRow], error: null };
+        },
+      }),
+    }),
+  };
+
+  const svcRetry = createCommunityPyqService({
+    supabaseClient: retryClient,
+    retryDelayMs: 0,
+    requestTimeoutMs: 500,
+  });
+  const resRetry = await svcRetry.fetchCommunityPyqsWithStatus();
+  assert.equal(callsA, 2);
+  assert.equal(resRetry.error, null);
+  assert.deepEqual(
+    resRetry.papers.map((p) => p.id),
+    ['cold-open-pyq-1']
+  );
+
+  // 26B: Stale expired JWT causes client query failures -> public anon REST fallback succeeds cleanly
+  let restCalls = 0;
+  const expiredJwtClient: any = {
+    from: () => ({
+      select: () => ({
+        order: async () => ({
+          data: null,
+          error: { message: 'JWT expired' },
+        }),
+      }),
+    }),
+  };
+
+  const svcFallback = createCommunityPyqService({
+    supabaseClient: expiredJwtClient,
+    retryDelayMs: 0,
+    requestTimeoutMs: 500,
+    usePublicRestFallback: true,
+    fetchImpl: (async (_url: any, init: any) => {
+      restCalls += 1;
+      assert.equal(init?.cache, 'no-store');
+      assert.ok(init?.headers?.apikey);
+      return new Response(JSON.stringify([sampleRow, removedRow]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch,
+  });
+  const resFallback = await svcFallback.fetchCommunityPyqsWithStatus();
+  assert.equal(restCalls, 1);
+  assert.equal(resFallback.error, null);
+  assert.deepEqual(
+    resFallback.papers.map((p) => p.id),
+    ['cold-open-pyq-1']
+  );
+
+  // 26C: When both client retries and public REST fail, return explicit error
+  const svcTotalFailure = createCommunityPyqService({
+    supabaseClient: expiredJwtClient,
+    retryDelayMs: 0,
+    requestTimeoutMs: 500,
+    usePublicRestFallback: true,
+    fetchImpl: (async () => new Response('Bad Gateway', { status: 502 })) as typeof fetch,
+  });
+  const resFailure = await svcTotalFailure.fetchCommunityPyqsWithStatus();
+  assert.equal(resFailure.papers.length, 0);
+  assert.ok(resFailure.error);
+});
+

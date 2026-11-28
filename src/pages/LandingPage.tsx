@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, BookOpen, Bookmark, UploadCloud, ArrowRight, Star, CheckCircle2 } from 'lucide-react';
+import { Search, BookOpen, Bookmark, UploadCloud, ArrowRight, Star, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Paper } from '../types';
 import { AppPerformanceFeedbackSection } from '../components/AppPerformanceFeedbackSection';
 
@@ -7,16 +7,22 @@ interface LandingPageProps {
   onNavigateToSearch: () => void;
   onSelectPaper: (paper: Paper) => void;
   samplePapers: Paper[];
+  isLoadingPapers?: boolean;
+  papersError?: string | null;
+  onRetryLoadPapers?: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onNavigateToSearch,
   onSelectPaper,
   samplePapers,
+  isLoadingPapers = false,
+  papersError = null,
+  onRetryLoadPapers,
 }) => {
   // Mechanism: Sort papers by ratings descending, displaying the top 3 highest-rated papers
   const showcasePapers = [...samplePapers]
-    .filter((p) => p.status === 'approved')
+    .filter((p) => p.status === 'approved' || p.status === 'active')
     .sort((a, b) => (b.rating || 0) - (a.rating || 0))
     .slice(0, 3);
 
@@ -125,6 +131,49 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                   </div>
                 ))
+              ) : isLoadingPapers ? (
+                <div className="space-y-3" aria-label="Loading question papers">
+                  {[0, 1, 2].map((idx) => (
+                    <div
+                      key={idx}
+                      className={`bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-4 shadow-xs animate-pulse space-y-3 ${
+                        idx === 1 ? 'lg:translate-x-2' : idx === 2 ? 'lg:-translate-x-1' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="h-3 w-32 rounded bg-[var(--surface-elevated)]" />
+                        <div className="h-3 w-12 rounded bg-[var(--surface-elevated)]" />
+                      </div>
+                      <div className="h-4 w-3/4 rounded bg-[var(--surface-elevated)]" />
+                      <div className="pt-2 border-t border-[var(--border-divider)] flex items-center justify-between">
+                        <div className="h-3 w-24 rounded bg-[var(--surface-elevated)]" />
+                        <div className="h-3 w-16 rounded bg-[var(--surface-elevated)]" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : papersError ? (
+                <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-7 text-center space-y-3 shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center mx-auto">
+                    <RefreshCw className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                    Could not load question papers
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-xs mx-auto">
+                    Connection to the paper archive was interrupted. Retry to load the latest papers.
+                  </p>
+                  {onRetryLoadPapers && (
+                    <button
+                      type="button"
+                      onClick={onRetryLoadPapers}
+                      className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[var(--accent-blue)] text-white font-semibold text-xs rounded-lg transition-all shadow-xs cursor-pointer whitespace-nowrap btn-quad-border"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Retry</span>
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-7 text-center space-y-3 shadow-xs">
                   <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center mx-auto">

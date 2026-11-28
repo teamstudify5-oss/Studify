@@ -73,7 +73,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
         <div className="w-12 h-12 bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-2xl flex items-center justify-center mx-auto text-[var(--accent-blue)]">
           <FolderClosed className="w-6 h-6" />
         </div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-xl font-bold text-[var(--text-primary)]">
           Sign in to view your papers
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
@@ -82,7 +82,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
         <button
           type="button"
           onClick={() => openAuthModal('login')}
-          className="px-5 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all cursor-pointer btn-quad-border"
+          className="px-5 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity cursor-pointer"
         >
           Sign In
         </button>
@@ -124,9 +124,9 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-5 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-5 shadow-xs">
         <div className="space-y-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
             My Uploaded Papers
           </h1>
           <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
@@ -137,7 +137,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
         <button
           type="button"
           onClick={onNavigateToUpload}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all self-start sm:self-auto cursor-pointer btn-quad-border"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity self-start sm:self-auto cursor-pointer"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Upload Another Paper</span>
@@ -159,7 +159,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
 
       {/* Submissions List */}
       {userSubmissions.length > 0 ? (
-        <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl overflow-hidden shadow-xs">
+        <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl overflow-hidden shadow-xs">
           <div className="divide-y divide-[var(--border-divider)]">
             {userSubmissions.map((paper) => (
               <div
@@ -203,7 +203,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                   </h3>
 
                   {paper.status === 'removed' && paper.removalReason && (
-                    <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2.5 py-1.5">
+                    <div className="text-xs text-[var(--color-red)] bg-[var(--accent-red-bg)] border border-[var(--color-red)]/25 rounded-lg px-2.5 py-1.5">
                       <strong>Administrator reason:</strong> {paper.removalReason}
                     </div>
                   )}
@@ -226,7 +226,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                   <button
                     type="button"
                     onClick={() => onSelectPaper(paper)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer btn-quad-border"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                     <span>View</span>
@@ -235,7 +235,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setEditingPaper(paper)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer btn-quad-border"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Edit2 className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
                     <span>Edit</span>
@@ -248,7 +248,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
                       setConfirmDeletePaper(paper);
                     }}
                     disabled={deletingId === paper.id}
-                    className="px-2.5 py-1.5 rounded-lg border border-[var(--color-red)]/30 bg-[var(--accent-red-bg)] hover:opacity-90 text-[var(--color-red)] text-xs font-semibold transition-opacity flex items-center gap-1 disabled:opacity-50 cursor-pointer btn-quad-border"
+                    className="px-2.5 py-1.5 rounded-lg border border-[var(--color-red)]/30 bg-[var(--accent-red-bg)] hover:opacity-90 text-[var(--color-red)] text-xs font-semibold transition-opacity flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                     title="Delete Paper"
                     aria-label="Delete Paper"
                   >
@@ -261,12 +261,12 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
           </div>
         </div>
       ) : (
-        <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-12 text-center space-y-4 shadow-xs">
-          <div className="w-12 h-12 bg-[var(--surface-secondary)] rounded-2xl flex items-center justify-center mx-auto text-[var(--accent-blue)]">
+        <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-12 text-center space-y-4 shadow-xs">
+          <div className="w-12 h-12 bg-[var(--surface-elevated)] rounded-2xl flex items-center justify-center mx-auto text-[var(--accent-blue)]">
             <FolderClosed className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-[var(--text-primary)]">No uploads yet</h3>
+            <h3 className="font-display text-base font-bold text-[var(--text-primary)]">No uploads yet</h3>
             <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
               You haven't contributed any past examination papers yet. Uploading helps thousands of fellow students prepare effectively.
             </p>
@@ -274,7 +274,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({
           <button
             type="button"
             onClick={onNavigateToUpload}
-            className="px-5 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all inline-flex items-center gap-2 cursor-pointer btn-quad-border"
+            className="px-5 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity inline-flex items-center gap-2 cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Upload Your First Paper</span>

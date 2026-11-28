@@ -234,7 +234,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     setCaptures(workspaceService.getQuickCaptures());
   };
 
-  // If a specific project is selected, render its dedicated workspace view
   if (activeProjectId) {
     const selectedProject = projects.find((p) => p.id === activeProjectId);
     if (selectedProject) {
@@ -274,7 +273,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     }
   }
 
-  // Aggregate stats across projects
   const visiblePaperIds = new Set(papers.map((p) => p.id));
   const totalTasks = projects.reduce((acc, p) => acc + p.tasks.length, 0);
   const completedTasks = projects.reduce((acc, p) => acc + p.tasks.filter((t) => t.completed).length, 0);
@@ -291,42 +289,41 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   const projectTitleById = new Map(projects.map((p) => [p.id, p.title]));
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      {/* Student Desktop Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-[var(--border-divider)] pb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-blue)]">
-              Personal Study Workspace
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      {/* Structured Workspace Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 border-b border-[var(--border-divider)] pb-6">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+            <span className="font-semibold uppercase tracking-wider text-[var(--accent-mint)]">
+              Study Workspace
             </span>
-            <span className="text-[var(--text-muted)] opacity-60">·</span>
-            <span className="text-xs text-[var(--text-secondary)]">
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] tracking-tight mt-1">
-            {currentUser ? `Welcome back, ${currentUser.name.split(' ')[0]}` : 'Study Workspace'}
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[var(--text-primary)] tracking-tight">
+            {currentUser ? `Welcome back, ${currentUser.name.split(' ')[0]}` : 'Personal Study Planner'}
           </h1>
-          <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-xl">
-            A focused environment to organize subjects, manage milestones, capture notes, and track PYQ practice.
+          <p className="text-sm text-[var(--text-secondary)] max-w-xl leading-relaxed">
+            Organize subject milestones on a clear schedule, store backed-up PDFs and handwritten notes, and keep past papers linked.
           </p>
         </div>
 
-        {/* Quick Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => handleRequestQuickCapture()}
-            className="px-3.5 py-2 rounded-xl bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border whitespace-nowrap"
+            className="min-h-[40px] px-4 py-2 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
           >
-            <Zap className="w-3.5 h-3.5 text-[var(--color-yellow)]" />
+            <Zap className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
             <span>Quick Capture</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleOpenCreateModal(false)}
-            className="px-4 py-2 rounded-xl bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer btn-quad-border whitespace-nowrap"
+            className="min-h-[40px] px-4 py-2 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Project</span>
@@ -336,7 +333,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       {/* Logged-Out Guest Sync Suggestion Banner */}
       {!currentUser && !isGuestBannerDismissed && (
-        <div className="p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center shrink-0 mt-0.5">
               <Cloud className="w-4 h-4" />
@@ -345,8 +342,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               <div className="text-xs font-semibold text-[var(--text-primary)]">
                 Saved on this browser · Sign in to sync across devices
               </div>
-              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                Your projects and notes work offline right here. Sign in to back up your workspace on any device and unlock PYQ uploads and bookmarks.
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Your projects, notes, and schedules work right here. Sign in to back up across any device and unlock uploads and bookmarks.
               </p>
             </div>
           </div>
@@ -355,7 +352,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <button
               type="button"
               onClick={() => openAuthModal('login')}
-              className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
+              className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold flex items-center gap-1.5 transition-opacity cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>Sign In to Sync</span>
@@ -367,7 +364,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               aria-label="Dismiss sign-in suggestion"
               title="Dismiss"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -375,14 +372,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       {/* Session Restoration Banner */}
       {previousSession && previousSession.activeProjectId && (
-        <div className="p-3.5 sm:p-4 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] flex items-center justify-between gap-3 shadow-xs">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
-              <RotateCcw className="w-3.5 h-3.5" />
+            <div className="w-8 h-8 rounded-lg bg-[var(--accent-mint)]/12 text-[var(--accent-mint)] flex items-center justify-center shrink-0">
+              <RotateCcw className="w-4 h-4" />
             </div>
             <div className="text-xs">
-              <span className="font-medium text-[var(--text-primary)]">Resume Previous Study Session: </span>
-              <span className="text-[var(--accent-blue)] font-medium">
+              <span className="font-medium text-[var(--text-secondary)]">Resume previous session: </span>
+              <span className="text-[var(--text-primary)] font-semibold">
                 {projects.find((p) => p.id === previousSession.activeProjectId)?.title || 'Active Project'}
               </span>
             </div>
@@ -390,67 +387,67 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
           <button
             type="button"
             onClick={() => handleOpenProject(previousSession.activeProjectId!)}
-            className="px-3 py-1 bg-[var(--accent-blue-bg)] hover:bg-[var(--surface-elevated)] text-[var(--accent-blue)] text-xs font-semibold rounded-lg border border-[var(--accent-blue)]/30 shrink-0 transition-colors cursor-pointer btn-quad-border"
+            className="min-h-[36px] px-3.5 py-1.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold rounded-lg shrink-0 transition-colors cursor-pointer whitespace-nowrap"
           >
             Resume →
           </button>
         </div>
       )}
 
-      {/* Coherent Stat Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl divide-y lg:divide-y-0 lg:divide-x divide-[var(--border-divider)] shadow-xs">
+      {/* Clean Schedule Overview Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl divide-y lg:divide-y-0 lg:divide-x divide-[var(--border-divider)]">
         <div className="p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
             <span>Projects</span>
             <Folder className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
           </div>
-          <div className="text-2xl font-bold text-[var(--text-primary)] font-mono tabular-nums">{projects.length}</div>
+          <div className="font-display text-2xl font-bold text-[var(--text-primary)] tabular-nums">{projects.length}</div>
           <div className="text-[11px] text-[var(--text-muted)]">Subject workspaces</div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-            <span>Total Notes</span>
-            <FileText className="w-3.5 h-3.5 text-[var(--color-yellow)]" />
+            <span>Study Notes</span>
+            <FileText className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
           </div>
-          <div className="text-2xl font-bold text-[var(--text-primary)] font-mono tabular-nums">{totalNotes}</div>
+          <div className="font-display text-2xl font-bold text-[var(--text-primary)] tabular-nums">{totalNotes}</div>
           <div className="text-[11px] text-[var(--text-muted)]">
-            {currentUser ? 'Synced study notes' : 'Saved on this browser'}
+            {currentUser ? 'Synced across devices' : 'Saved on this device'}
           </div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
             <span>Milestones</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-green)]" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
           </div>
-          <div className="text-2xl font-bold text-[var(--text-primary)] font-mono tabular-nums">
+          <div className="font-display text-2xl font-bold text-[var(--text-primary)] tabular-nums">
             {completedTasks}/{totalTasks}
           </div>
-          <div className="text-[11px] text-[var(--color-green)] font-medium">
+          <div className="text-[11px] text-[var(--accent-mint)] font-medium tabular-nums">
             {totalTasks > 0 ? `${Math.round((completedTasks / totalTasks) * 100)}% completed` : 'All clear'}
           </div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-            <span>Attached PYQs</span>
+            <span>Linked PYQs</span>
             <Bookmark className="w-3.5 h-3.5 text-[var(--accent-blue)]" />
           </div>
-          <div className="text-2xl font-bold text-[var(--text-primary)] font-mono tabular-nums">{totalAttachedPapers}</div>
-          <div className="text-[11px] text-[var(--text-muted)]">Papers linked</div>
+          <div className="font-display text-2xl font-bold text-[var(--text-primary)] tabular-nums">{totalAttachedPapers}</div>
+          <div className="text-[11px] text-[var(--text-muted)]">Past papers attached</div>
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex border-b border-[var(--border-divider)] gap-1 overflow-x-auto pb-1">
+      {/* Editorial Underline Sub-Tabs */}
+      <div className="flex border-b border-[var(--border-divider)] gap-6 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab('projects')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+          className={`pb-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap cursor-pointer -mb-px tabular-nums ${
             activeTab === 'projects'
-              ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
+              ? 'border-[var(--accent-blue)] text-[var(--text-primary)]'
+              : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
           Study Projects ({projects.length})
@@ -458,10 +455,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('inbox')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+          className={`pb-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap cursor-pointer -mb-px tabular-nums ${
             activeTab === 'inbox'
-              ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
+              ? 'border-[var(--accent-blue)] text-[var(--text-primary)]'
+              : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
           Quick-Capture Scratchpad ({captures.length})
@@ -470,99 +467,98 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       {/* TAB 1: Projects Grid */}
       {activeTab === 'projects' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {projects.map((proj) => {
-              const compTasks = proj.tasks.filter((t) => t.completed).length;
-              const pct = proj.tasks.length > 0 ? Math.round((compTasks / proj.tasks.length) * 100) : 0;
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {projects.map((proj) => {
+            const compTasks = proj.tasks.filter((t) => t.completed).length;
+            const pct = proj.tasks.length > 0 ? Math.round((compTasks / proj.tasks.length) * 100) : 0;
 
-              return (
-                <div
-                  key={proj.id}
-                  onClick={() => handleOpenProject(proj.id)}
-                  className="p-5 rounded-xl bg-[var(--surface-main)]/85 backdrop-blur-md hover:bg-[var(--surface-elevated)]/90 border border-[var(--border-divider)] hover:border-[var(--border-hover)] cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-4 group shadow-xs hover:shadow-md"
-                >
-                  <div className="space-y-2.5">
-                    {/* Top row: Subject & Date */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-[var(--accent-blue)]">{proj.subject || 'General Workspace'}</span>
-                      {proj.targetDate && (
-                        <span className="text-[11px] text-[var(--color-yellow)] font-mono tabular-nums">
-                          Target: {proj.targetDate}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Title & Description */}
-                    <div>
-                      <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] transition-colors line-clamp-1">
-                        {proj.title}
-                      </h3>
-                      {proj.description && (
-                        <p className="text-xs text-[var(--text-secondary)] line-clamp-2 mt-1 leading-relaxed">
-                          {proj.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Milestone Progress Bar */}
-                    <div className="space-y-1 pt-1">
-                      <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-                        <span>Milestones</span>
-                        <span className="font-mono tabular-nums">{pct}% ({compTasks}/{proj.tasks.length})</span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-[var(--surface-secondary)] overflow-hidden">
-                        <div
-                          className="h-full bg-[var(--accent-blue)] rounded-full transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
+            return (
+              <div
+                key={proj.id}
+                onClick={() => handleOpenProject(proj.id)}
+                className="p-5 rounded-xl bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)]/60 border border-[var(--border-divider)] hover:border-[var(--border-hover)] cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-4 group"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-xs gap-2">
+                    <span className="font-semibold text-[var(--accent-mint)] truncate">
+                      {proj.subject || 'General Workspace'}
+                    </span>
+                    {proj.targetDate && (
+                      <span className="text-[11px] text-[var(--text-secondary)] font-mono tabular-nums shrink-0">
+                        Due {proj.targetDate}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Footer Info */}
-                  <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2 text-[var(--text-muted)] tabular-nums">
-                      <span>{proj.paperIds.filter((id) => visiblePaperIds.has(id)).length} papers</span>
-                      <span>·</span>
-                      <span>{proj.notes.length} notes</span>
-                    </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] transition-colors line-clamp-1">
+                      {proj.title}
+                    </h3>
+                    {proj.description && (
+                      <p className="text-xs text-[var(--text-secondary)] line-clamp-2 mt-1 leading-relaxed">
+                        {proj.description}
+                      </p>
+                    )}
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteProject(proj.id, proj.title, e)}
-                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-red)] rounded-lg transition-colors cursor-pointer btn-quad-border"
-                        title="Delete project"
-                        aria-label="Delete project"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-[var(--accent-blue)] font-medium group-hover:translate-x-0.5 transition-transform">
-                        Open →
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                      <span>Milestones</span>
+                      <span className="font-mono tabular-nums text-[var(--text-primary)] font-medium">
+                        {pct}% ({compTasks}/{proj.tasks.length})
                       </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-[var(--surface-secondary)] overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent-mint)] rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
                   </div>
                 </div>
-              );
-            })}
 
-            {/* Create Project Card Placeholder */}
-            <div
-              onClick={() => handleOpenCreateModal(false)}
-              className="p-6 rounded-xl border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] bg-[var(--surface-main)]/50 hover:bg-[var(--surface-elevated)] cursor-pointer flex flex-col items-center justify-center text-center space-y-2.5 transition-all min-h-[190px]"
-            >
-              <div className="w-9 h-9 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center">
-                <Plus className="w-4 h-4" />
+                <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                  <div className="flex items-center gap-2 text-[var(--text-muted)] tabular-nums">
+                    <span>{proj.paperIds.filter((id) => visiblePaperIds.has(id)).length} papers</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{proj.notes.length} notes</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteProject(proj.id, proj.title, e)}
+                      className="p-1.5 text-[var(--text-muted)] hover:text-[var(--color-red)] rounded-lg transition-colors cursor-pointer"
+                      title="Delete project"
+                      aria-label="Delete project"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[var(--accent-blue)] font-semibold group-hover:translate-x-0.5 transition-transform">
+                      Open →
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-semibold text-[var(--text-primary)]">Create Study Project</h4>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5 max-w-[200px]">
-                  Dedicate a workspace for a subject, chapter, or upcoming exam.
-                </p>
-              </div>
+            );
+          })}
+
+          {/* Create Project Card */}
+          <button
+            type="button"
+            onClick={() => handleOpenCreateModal(false)}
+            className="p-6 rounded-xl border border-dashed border-[var(--border-divider)] hover:border-[var(--accent-blue)] bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)]/60 cursor-pointer flex flex-col items-center justify-center text-center space-y-2.5 transition-colors min-h-[196px]"
+          >
+            <div className="w-9 h-9 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center">
+              <Plus className="w-4 h-4" />
             </div>
-          </div>
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">Create Study Project</h4>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5 max-w-[210px]">
+                Dedicate a workspace for a subject, chapter, or upcoming exam.
+              </p>
+            </div>
+          </button>
         </div>
       )}
 
@@ -576,10 +572,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                   key={f}
                   type="button"
                   onClick={() => setCaptureFilter(f)}
-                  className={`px-3 py-1 rounded-lg capitalize font-medium transition-colors cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg capitalize font-medium transition-colors cursor-pointer border ${
                     captureFilter === f
-                      ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-main)] border border-[var(--border-divider)]'
+                      ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] border-[var(--accent-blue)] font-semibold'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-main)] border-[var(--border-divider)]'
                   }`}
                 >
                   {f}
@@ -590,16 +586,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <button
               type="button"
               onClick={() => handleRequestQuickCapture()}
-              className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] text-[var(--text-primary)] border border-[var(--border-divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 text-[var(--accent-mint)]" />
               <span>Capture Thought</span>
             </button>
           </div>
 
           {filteredCaptures.length === 0 ? (
-            <div className="p-8 text-center bg-[var(--surface-main)]/85 border border-[var(--border-divider)] rounded-xl space-y-2.5">
-              <Zap className="w-6 h-6 text-[var(--color-yellow)] mx-auto" />
+            <div className="p-8 text-center bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl space-y-2.5">
+              <Zap className="w-6 h-6 text-[var(--accent-mint)] mx-auto" />
               <div className="text-sm font-semibold text-[var(--text-primary)]">
                 {projects.length === 0
                   ? 'Create a Study Project to start capturing'
@@ -613,7 +609,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               <button
                 type="button"
                 onClick={() => handleRequestQuickCapture()}
-                className="px-4 py-1.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg hover:opacity-90 cursor-pointer"
+                className="min-h-[38px] px-4 py-1.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg hover:opacity-90 cursor-pointer"
               >
                 {projects.length === 0 ? 'Create Project & Capture' : 'Capture Thought'}
               </button>
@@ -627,16 +623,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                     key={item.id}
                     className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
                       item.isResolved
-                        ? 'bg-[var(--surface-secondary)]/50 border-[var(--border-divider)] opacity-60'
+                        ? 'bg-[var(--surface-elevated)] border-[var(--border-divider)] opacity-65'
                         : 'bg-[var(--surface-main)] border-[var(--border-divider)] hover:border-[var(--border-hover)]'
                     }`}
                   >
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs gap-2">
-                        <span className="font-mono text-[10px] uppercase text-[var(--color-yellow)] font-semibold">
+                        <span className="font-mono text-[11px] uppercase text-[var(--accent-mint)] font-semibold truncate">
                           {item.type}{projName ? ` · ${projName}` : ''}
                         </span>
-                        <span className="text-[10px] text-[var(--text-muted)] font-mono tabular-nums shrink-0">
+                        <span className="text-[11px] text-[var(--text-muted)] font-mono tabular-nums shrink-0">
                           {new Date(item.createdAt).toLocaleDateString()}
                         </span>
                       </div>
@@ -650,11 +646,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                       </p>
 
                       {item.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1">
+                        <div className="flex flex-wrap gap-2 pt-1 text-[11px] text-[var(--text-muted)]">
                           {item.tags.map((t) => (
-                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-[var(--text-muted)]">
-                              #{t}
-                            </span>
+                            <span key={t}>#{t}</span>
                           ))}
                         </div>
                       )}
@@ -664,9 +658,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                       <button
                         type="button"
                         onClick={() => handleToggleResolveCapture(item.id)}
-                        className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] hover:underline cursor-pointer"
+                        className="flex items-center gap-1.5 text-xs text-[var(--accent-blue)] font-medium hover:underline cursor-pointer"
                       >
-                        <CheckCircle2 className={`w-3.5 h-3.5 ${item.isResolved ? 'text-[var(--color-green)]' : ''}`} />
+                        <CheckCircle2 className={`w-3.5 h-3.5 ${item.isResolved ? 'text-[var(--accent-mint)]' : ''}`} />
                         <span>{item.isResolved ? 'Completed' : 'Mark Resolved'}</span>
                       </button>
 
@@ -675,6 +669,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                         onClick={() => handleDeleteCapture(item.id)}
                         className="text-[var(--text-muted)] hover:text-[var(--color-red)] p-1 transition-colors cursor-pointer"
                         title="Delete item"
+                        aria-label="Delete item"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

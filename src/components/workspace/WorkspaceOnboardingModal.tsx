@@ -25,7 +25,8 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-sm animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--modal-backdrop)' }}
       onClick={onClose}
       role="presentation"
     >
@@ -33,17 +34,17 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
         role="dialog"
         aria-modal="true"
         aria-labelledby="workspace-onboarding-title"
-        className="w-full max-w-md bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-2xl shadow-2xl overflow-hidden text-[var(--text-primary)]"
+        className="w-full max-w-md border border-[var(--border-divider)] rounded-2xl shadow-2xl overflow-hidden text-[var(--text-primary)]"
+        style={{ backgroundColor: 'var(--modal-bg)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="p-5 border-b border-[var(--border-divider)] flex items-start justify-between gap-3 bg-[var(--surface-elevated)]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
-              <FolderPlus className="w-4.5 h-4.5" />
+            <div className="w-9 h-9 rounded-xl bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--accent-blue)] flex items-center justify-center shrink-0">
+              <FolderPlus className="w-4 h-4" />
             </div>
             <div>
-              <h3 id="workspace-onboarding-title" className="text-base font-bold text-[var(--text-primary)] tracking-tight">
+              <h3 id="workspace-onboarding-title" className="font-display text-base font-bold text-[var(--text-primary)] tracking-tight">
                 Create a Project Workspace First
               </h3>
               <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
@@ -62,14 +63,13 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
           </button>
         </div>
 
-        {/* Explainer Body */}
         <div className="p-5 space-y-4">
           <div className="space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-blue)]">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-mint)]">
               What is Project Workspace?
             </h4>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-              A Project Workspace is a dedicated hub for a subject, chapter, or upcoming exam so every note, formula, milestone, and past paper stays in one structured place instead of getting lost.
+              A Project Workspace is a dedicated hub for a subject, chapter, or upcoming exam so every note, formula, milestone, and past paper stays in one structured place.
             </p>
           </div>
 
@@ -85,9 +85,9 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
             </div>
 
             <div className="p-3 flex items-start gap-2.5">
-              <Zap className="w-4 h-4 text-[var(--color-yellow)] shrink-0 mt-0.5" />
+              <Zap className="w-4 h-4 text-[var(--accent-mint)] shrink-0 mt-0.5" />
               <div>
-                <div className="text-xs font-semibold text-[var(--text-primary)]">Quick Capture & Project Notes</div>
+                <div className="text-xs font-semibold text-[var(--text-primary)]">Quick Capture &amp; Project Notes</div>
                 <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                   Save instant formulas, doubts, and structured study notes directly inside your project.
                 </p>
@@ -95,9 +95,9 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
             </div>
 
             <div className="p-3 flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-[var(--color-green)] shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 text-[var(--accent-mint)] shrink-0 mt-0.5" />
               <div>
-                <div className="text-xs font-semibold text-[var(--text-primary)]">Track Milestones & Attached PYQs</div>
+                <div className="text-xs font-semibold text-[var(--text-primary)]">Track Milestones &amp; Attached PYQs</div>
                 <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                   Check off chapter goals and attach previous year question papers for fast revision.
                 </p>
@@ -111,7 +111,6 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-[var(--border-divider)] bg-[var(--surface-elevated)] flex items-center justify-end gap-2">
           <button
             type="button"
@@ -123,7 +122,7 @@ export const WorkspaceOnboardingModal: React.FC<WorkspaceOnboardingModalProps> =
           <button
             type="button"
             onClick={onContinue}
-            className="px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            className="px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
             <span>Continue</span>
             <ArrowRight className="w-3.5 h-3.5" />

@@ -58,7 +58,7 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)]"
       onClick={onClose}
       role="presentation"
     >
@@ -67,14 +67,14 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-required-title"
-        className="bg-[var(--surface-main)]/95 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl max-w-sm w-full p-6 text-[var(--text-primary)] shadow-2xl relative overflow-hidden"
+        className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-2xl max-w-sm w-full p-6 text-[var(--text-primary)] shadow-2xl relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="btn-quad-border p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
@@ -83,11 +83,11 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
 
         {/* Heading */}
         <div className="text-center space-y-2 pt-1">
-          <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] border border-[var(--accent-blue)]/30 flex items-center justify-center mx-auto shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-[var(--accent-mint-bg)] text-[var(--accent-mint)] border border-[var(--accent-mint)]/25 flex items-center justify-center mx-auto">
             <Sparkles className="w-5 h-5" />
           </div>
 
-          <h3 id="login-required-title" className="text-lg font-bold tracking-tight text-[var(--text-primary)]">
+          <h3 id="login-required-title" className="font-display text-lg font-bold tracking-tight text-[var(--text-primary)]">
             Make Studify Yours
           </h3>
 
@@ -103,7 +103,7 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
               onClose();
               onSignIn();
             }}
-            className="btn-quad-border w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs active:scale-[0.99] cursor-pointer"
+            className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity shadow-xs cursor-pointer"
           >
             Sign In
           </button>
@@ -113,14 +113,14 @@ export const LoginRequiredModal: React.FC<LoginRequiredModalProps> = ({
               onClose();
               onCreateAccount();
             }}
-            className="btn-quad-border w-full py-2.5 px-4 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            className="w-full py-2.5 px-4 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors cursor-pointer"
           >
             Create Account
           </button>
 
           <button
             onClick={onClose}
-            className="btn-quad-border w-full py-2 px-4 bg-[var(--surface-secondary)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
+            className="w-full py-2 px-4 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition-colors cursor-pointer"
           >
             Maybe Later
           </button>

@@ -93,7 +93,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         <div className="w-12 h-12 bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl flex items-center justify-center mx-auto text-[var(--accent-blue)] shadow-xs">
           <Lock className="w-5 h-5 text-[var(--accent-blue)]" />
         </div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-xl font-bold text-[var(--text-primary)]">
           Sign in to upload papers
         </h1>
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-sm mx-auto">
@@ -103,7 +103,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
           <button
             type="button"
             onClick={() => openAuthModal('login')}
-            className="w-full py-2.5 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
+            className="w-full py-2.5 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
           >
             Sign In to Studify
           </button>
@@ -285,7 +285,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         <div className="w-12 h-12 bg-[var(--accent-green-bg)] text-[var(--color-green)] rounded-xl flex items-center justify-center mx-auto shadow-xs">
           <CheckCircle2 className="w-6 h-6" />
         </div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-xl font-bold text-[var(--text-primary)]">
           Paper Published Successfully!
         </h1>
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-sm mx-auto">
@@ -293,11 +293,11 @@ export const UploadPage: React.FC<UploadPageProps> = ({
         </p>
 
         {unlockCelebration ? (
-          <div className="p-3 bg-[var(--color-green)]/15 border border-[var(--color-green)]/30 rounded-xl text-xs text-[var(--color-green)] font-medium text-center">
+          <div className="p-3 bg-[var(--accent-mint-bg)] border border-[var(--accent-mint)]/30 rounded-xl text-xs text-[var(--accent-mint)] font-medium text-center">
             {unlockCelebration}
           </div>
         ) : quota ? (
-          <div className="p-2.5 bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)] font-mono text-center">
+          <div className="p-2.5 bg-[var(--surface-elevated)] border border-[var(--border-divider)] rounded-xl text-xs text-[var(--text-secondary)] font-mono tabular-nums text-center">
             Download Unlock Progress: {quota.currentCycleUploads}/2 PDFs uploaded
           </div>
         ) : null}
@@ -307,7 +307,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
             <button
               type="button"
               onClick={onNavigateToBrowse}
-              className="px-4 py-2 bg-[var(--accent-blue)] text-white text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
+              className="px-4 py-2 bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity hover:opacity-90 shadow-xs cursor-pointer"
             >
               Browse Library
             </button>
@@ -343,7 +343,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
           Upload Question Paper
         </h1>
         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -352,7 +352,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
       </div>
 
       {quota && (
-        <div className="p-3.5 rounded-2xl bg-[var(--surface-main)]/90 border border-[var(--border-divider)] shadow-xs flex items-center justify-between text-xs">
+        <div className="p-3.5 rounded-2xl bg-[var(--surface-main)] border border-[var(--border-divider)] shadow-xs flex items-center justify-between gap-3 text-xs tabular-nums">
           <div className="space-y-0.5">
             <div className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
               <span>PDF Contribution Progress:</span>
@@ -362,7 +362,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               Upload 2 unique PDFs to unlock 10 more downloads. (Downloads remaining: {quota.remainingDownloads})
             </div>
           </div>
-          <div className="text-right font-mono text-[11px] font-bold text-[var(--color-yellow)]">
+          <div className="text-right font-mono text-[11px] font-semibold text-[var(--accent-mint)] shrink-0">
             {quota.currentCycleUploads === 2 ? 'Unlocked' : `${2 - quota.currentCycleUploads} more needed`}
           </div>
         </div>
@@ -376,7 +376,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
       )}
 
       {/* Upload Form Container */}
-      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 sm:p-6 shadow-xs">
+      <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-2xl p-5 sm:p-6 shadow-xs">
         {/* Method Toggle: PDF vs Photographs */}
         <div className="flex rounded-xl bg-[var(--surface-elevated)] p-1 border border-[var(--border-divider)] mb-4">
           <button
@@ -385,9 +385,9 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               setUploadMethod('pdf');
               setErrorMessage(null);
             }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer ${
               uploadMethod === 'pdf'
-                ? 'bg-[var(--accent-blue)] text-white shadow-xs'
+                ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] shadow-xs'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -400,9 +400,9 @@ export const UploadPage: React.FC<UploadPageProps> = ({
               setUploadMethod('images');
               setErrorMessage(null);
             }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer ${
               uploadMethod === 'images'
-                ? 'bg-[var(--accent-blue)] text-white shadow-xs'
+                ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] shadow-xs'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -622,7 +622,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemovePhoto(photo.id)}
-                          className="absolute top-1 right-1 p-1 rounded-full bg-black/75 hover:bg-rose-600 text-white transition-colors cursor-pointer shadow-sm"
+                          className="absolute top-1 right-1 p-1 rounded-full bg-black/75 hover:bg-[var(--color-red)] text-white transition-colors cursor-pointer shadow-sm"
                           title="Remove photo"
                           aria-label={`Remove photo ${index + 1}`}
                         >
@@ -666,7 +666,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer btn-quad-border"
+            className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 disabled:opacity-50 text-white dark:text-[#0A2640] text-xs font-semibold rounded-xl transition-opacity shadow-xs flex items-center justify-center gap-2 cursor-pointer"
           >
             {isSubmitting ? (
               <span>Publishing Paper...</span>

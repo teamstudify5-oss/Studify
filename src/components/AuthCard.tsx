@@ -224,16 +224,16 @@ export const AuthCard: React.FC<AuthCardProps> = ({
 
   return (
     <div
-      className={`w-full max-w-md mx-auto bg-[var(--surface-main)]/90 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-6 sm:p-7 text-[var(--text-primary)] shadow-lg relative overflow-hidden ${
+      className={`w-full max-w-md mx-auto bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-2xl p-6 sm:p-7 text-[var(--text-primary)] shadow-lg relative overflow-hidden ${
         isModal ? '' : 'my-6 sm:my-10'
       }`}
     >
       {/* Studify Branding Header */}
       <div className="text-center space-y-1.5 relative z-10 mb-5">
-        <div className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+        <div className="text-xs font-mono uppercase tracking-wider text-[var(--accent-mint)] font-semibold">
           Studify
         </div>
-        <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
           {mode === 'login' ? 'Welcome back' : 'Create your account'}
         </h1>
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-xs mx-auto">
@@ -248,9 +248,9 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         <button
           type="button"
           onClick={() => switchMode('login')}
-          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer btn-quad-border ${
+          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
             mode === 'login'
-              ? 'bg-[var(--surface-main)] text-[var(--accent-blue)] shadow-xs'
+              ? 'bg-[var(--surface-main)] text-[var(--text-primary)] border border-[var(--border-divider)] shadow-xs'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
@@ -259,9 +259,9 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         <button
           type="button"
           onClick={() => switchMode('signup')}
-          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer btn-quad-border ${
+          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
             mode === 'signup'
-              ? 'bg-[var(--surface-main)] text-[var(--accent-blue)] shadow-xs'
+              ? 'bg-[var(--surface-main)] text-[var(--text-primary)] border border-[var(--border-divider)] shadow-xs'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
@@ -338,7 +338,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 onClick={() => setRememberMe(!rememberMe)}
                 className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer ${
                   rememberMe
-                    ? 'bg-[var(--accent-blue)] border-[var(--accent-blue)] text-white dark:text-[#1C2530]'
+                    ? 'bg-[var(--accent-blue)] border-[var(--accent-blue)] text-white dark:text-[#0A2640]'
                     : 'bg-[var(--input-bg)] border-[var(--input-border)]'
                 }`}
               >
@@ -355,7 +355,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
             <button
               type="submit"
               disabled={loginLoading}
-              className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed btn-quad-border"
+              className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity shadow-xs mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loginLoading ? 'Signing In...' : 'Log In'}
             </button>
@@ -377,7 +377,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer btn-quad-border"
+              className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -513,7 +513,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           <button
             type="submit"
             disabled={signupLoading}
-            className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity shadow-xs active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed btn-quad-border"
+            className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity shadow-xs mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {signupLoading ? 'Creating Account...' : 'Create Account'}
           </button>
@@ -542,7 +542,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer btn-quad-border"
+            className="w-full py-2 px-3.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-primary)] text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" aria-hidden="true">
               <path
