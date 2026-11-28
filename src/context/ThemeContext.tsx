@@ -16,10 +16,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
       const saved = localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved === 'dark') return 'dark';
-      return 'light'; // Crisp white & Boldo navy daylight canvas is default
+      if (saved === 'light') return 'light';
+      return 'dark'; // Dark mode is default for first-time visitors
     } catch {
-      return 'light';
+      return 'dark';
     }
   });
 

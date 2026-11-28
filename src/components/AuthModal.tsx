@@ -57,7 +57,7 @@ export const AuthModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto"
       onClick={closeAuthModal}
       role="presentation"
     >
@@ -69,12 +69,12 @@ export const AuthModal: React.FC = () => {
         className="relative w-full max-w-md my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
+        {/* Floating Close Button */}
         <button
           type="button"
           onClick={closeAuthModal}
           aria-label="Close authentication dialog"
-          className="absolute -top-3 -right-3 z-20 w-8 h-8 rounded-full bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center shadow-md transition-colors cursor-pointer"
+          className="absolute -top-3 -right-3 z-20 w-8 h-8 rounded-full bg-[#2D3741] border border-[#46535F] text-[#B6C0C9] hover:text-white flex items-center justify-center shadow-lg transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>

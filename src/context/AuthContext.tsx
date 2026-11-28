@@ -114,13 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     let isMounted = true;
-    let roleResolved = false;
-
-    const authFailsafeTimer = setTimeout(() => {
-      if (isMounted && !roleResolved) {
-        setAuthReady(true);
-      }
-    }, 4500);
 
     const applySessionTransition = async (supabaseUser: any | null) => {
       const seq = ++authSeqRef.current;
@@ -131,7 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       activeUserIdRef.current = nextUserId;
 
       if (!supabaseUser) {
-        roleResolved = true;
         if (isMounted) {
           setCurrentUser(null);
           setAuthReady(true);
@@ -141,25 +133,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let isDbAdmin = false;
       try {
-        const rolePromise = supabase
+        const { data: roleRow, error: roleError } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', supabaseUser.id)
           .maybeSingle();
-
-        const roleResult = await Promise.race([
-          rolePromise,
-          new Promise<{ data: null; error: { message: string } }>((resolve) =>
-            setTimeout(() => resolve({ data: null, error: { message: 'role lookup timeout' } }), 4000)
-          ),
-        ]);
-
-        if (roleResult?.error) {
-          console.warn('user_roles lookup notice:', roleResult.error.message);
-        } else if (
-          roleResult?.data &&
-          (roleResult.data.role === 'owner' || roleResult.data.role === 'admin')
-        ) {
+        if (roleError) {
+          console.warn('user_roles lookup notice:', roleError.message);
+        } else if (roleRow && (roleRow.role === 'owner' || roleRow.role === 'admin')) {
           isDbAdmin = true;
         }
       } catch (err) {
@@ -170,7 +151,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      roleResolved = true;
       setCurrentUser(mapSupabaseUser(supabaseUser, isDbAdmin));
       setAuthReady(true);
     };
@@ -180,7 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(({ data: { session }, error }) => {
         if (error) {
           console.error('Error fetching Supabase session:', error.message);
-          roleResolved = true;
           if (isMounted) {
             setAuthReady(true);
           }
@@ -192,7 +171,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch((err) => {
         console.error('Unexpected error checking session:', err);
-        roleResolved = true;
         if (isMounted) {
           setAuthReady(true);
         }
@@ -208,7 +186,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
-      clearTimeout(authFailsafeTimer);
       subscription?.unsubscribe();
     };
   }, []);

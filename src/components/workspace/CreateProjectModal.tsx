@@ -99,8 +99,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'var(--modal-backdrop)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
       onClick={handleClose}
       role="presentation"
     >
@@ -108,15 +107,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-project-modal-title"
-        className="w-full max-w-lg border border-[var(--border-divider)] rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4 text-[var(--text-primary)]"
-        style={{ backgroundColor: 'var(--modal-bg)' }}
+        className="w-full max-w-lg bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl shadow-xl p-5 sm:p-6 space-y-4 text-[var(--text-primary)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--border-divider)] pb-3">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <FolderPlus className="w-4 h-4 text-[var(--accent-blue)] shrink-0" />
             <div>
-              <h3 id="create-project-modal-title" className="font-display text-base font-bold text-[var(--text-primary)]">
+              <h3 id="create-project-modal-title" className="text-base font-semibold text-[var(--text-primary)]">
                 Create New Project
               </h3>
               <p className="text-[11px] text-[var(--text-secondary)]">
@@ -161,24 +159,25 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             />
           </div>
 
-          <div className="border border-[var(--border-divider)] rounded-lg bg-[var(--surface-elevated)] overflow-hidden">
+          {/* Collapsible / Optional details toggle */}
+          <div className="border border-[var(--border-divider)] rounded-lg bg-[var(--surface-main)] overflow-hidden">
             <button
               type="button"
               onClick={() => setShowOptionalDetails(!showOptionalDetails)}
-              className="w-full p-2.5 text-left flex items-center justify-between hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
+              className="w-full p-2.5 text-left flex items-center justify-between hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
             >
               <span className="text-xs font-medium text-[var(--text-secondary)]">
                 {showOptionalDetails
                   ? '− Optional Details (Subject, Board, Target Date)'
                   : '+ Optional Details (Subject, Board, Target Date)'}
               </span>
-              <span className="text-[11px] text-[var(--accent-blue)] font-semibold">
+              <span className="text-[11px] text-[var(--accent-blue)] font-medium">
                 {showOptionalDetails ? 'Hide' : 'Add Details'}
               </span>
             </button>
 
             {showOptionalDetails && (
-              <div className="p-3 pt-0 space-y-3 border-t border-[var(--border-divider)] bg-[var(--surface-main)]">
+              <div className="p-3 pt-0 space-y-3 border-t border-[var(--border-divider)]">
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <div>
                     <label className="block text-[11px] text-[var(--text-secondary)] mb-1 font-medium">
@@ -266,8 +265,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   onClick={() => setNextStep('notes')}
                   className={`px-3 py-2 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                     nextStep === 'notes'
-                      ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] border-[var(--accent-blue)]'
-                      : 'bg-[var(--surface-elevated)] border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--accent-blue-bg)] border-[var(--accent-blue)]/40 text-[var(--accent-blue)]'
+                      : 'bg-[var(--surface-main)] border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -278,8 +277,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   onClick={() => setNextStep('capture')}
                   className={`px-3 py-2 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                     nextStep === 'capture'
-                      ? 'bg-[var(--accent-blue)] text-white dark:text-[#0A2640] border-[var(--accent-blue)]'
-                      : 'bg-[var(--surface-elevated)] border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--accent-yellow-bg)] border-[var(--color-yellow)]/40 text-[var(--color-yellow)]'
+                      : 'bg-[var(--surface-main)] border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5" />
@@ -294,14 +293,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
               type="button"
               onClick={handleClose}
               disabled={isCreating}
-              className="px-3.5 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isCreating || !title.trim()}
-              className="px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              className="px-4 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-xs transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               {isCreating ? (
                 <>

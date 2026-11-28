@@ -207,11 +207,11 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsBottomSheetOpen(true)}
-          className="px-4 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs sm:text-sm font-semibold rounded-lg transition-opacity flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap self-start sm:self-auto"
+          className="btn-quad-border px-4 py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs sm:text-sm font-semibold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0 whitespace-nowrap self-start sm:self-auto"
         >
           <MessageSquarePlus className="w-4 h-4 shrink-0" />
           <span>
-            {summary.userRating ? `Edit Your Review (${summary.userRating}/5)` : 'Rate & Review Studify'}
+            {summary.userRating ? `Edit Your Review (${summary.userRating}★)` : 'Rate & Review Studify'}
           </span>
         </button>
       </div>
@@ -235,9 +235,9 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
       )}
 
       {/* Play Store-Style Overall Rating & 5-to-1 Breakdown Card (Above Reviews) */}
-      <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-5 sm:p-6">
+      <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-2xl p-5 sm:p-6 shadow-xs">
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center animate-pulse">
             <div className="md:col-span-4 space-y-2">
               <div className="h-12 w-24 rounded-lg bg-[var(--surface-secondary)]" />
               <div className="h-4 w-28 rounded bg-[var(--surface-secondary)]" />
@@ -351,7 +351,7 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
                 return (
                   <article
                     key={item.id}
-                    className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-4 sm:p-5 space-y-3"
+                    className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-4 space-y-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -515,7 +515,7 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
                           <button
                             type="submit"
                             disabled={isSubmittingReply || !replyDraft.trim()}
-                            className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-40"
+                            className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-40"
                           >
                             {isSubmittingReply ? (
                               <>
@@ -534,7 +534,7 @@ export const AppPerformanceFeedbackSection: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-xl p-6 text-center space-y-2">
+            <div className="bg-[var(--surface-main)]/70 border border-[var(--border-divider)] rounded-xl p-6 text-center space-y-2">
               {starFilter !== null ? (
                 <>
                   <p className="text-xs sm:text-sm text-[var(--text-secondary)]">

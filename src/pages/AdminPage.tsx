@@ -441,12 +441,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-divider)] pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-mint)]">
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] border border-[var(--color-yellow)]/30">
               Admin & Owner
             </span>
             <span className="text-xs text-[var(--text-secondary)]">{currentUser?.email}</span>
           </div>
-          <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight mt-1">
             Moderation & Review Panel
           </h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -455,18 +455,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-[var(--surface-main)] p-1 rounded-xl border border-[var(--border-divider)] text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 bg-[var(--surface-main)]/85 backdrop-blur-md p-1 rounded-xl border border-[var(--border-divider)] text-xs">
           <button
             type="button"
             onClick={() => setActiveTab('reports')}
-            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border ${
               activeTab === 'reports'
                 ? 'bg-[var(--accent-red-bg)] text-[var(--color-red)] font-semibold'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             <Flag className="w-3.5 h-3.5" />
-            <span className="tabular-nums">Reports ({pendingReportsCount})</span>
+            <span>Reports ({pendingReportsCount})</span>
           </button>
           <button
             type="button"
@@ -474,14 +474,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               setActiveTab('submissions');
               loadModerationPapers();
             }}
-            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border ${
               activeTab === 'submissions'
-                ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
+                ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] font-semibold'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span className="tabular-nums">Submissions ({pendingSubmissionsCount})</span>
+            <span>Submissions ({pendingSubmissionsCount})</span>
           </button>
           <button
             type="button"
@@ -489,14 +489,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               setActiveTab('removed');
               loadModerationPapers();
             }}
-            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border ${
               activeTab === 'removed'
-                ? 'bg-[var(--accent-red-bg)] text-[var(--color-red)] font-semibold'
+                ? 'bg-rose-500/15 text-rose-400 font-semibold'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span className="tabular-nums">Removed / Unpublished ({removedPapers.length})</span>
+            <span>Removed / Unpublished ({removedPapers.length})</span>
           </button>
           <button
             type="button"
@@ -504,7 +504,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               setActiveTab('logs');
               loadAuditLogs();
             }}
-            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors cursor-pointer btn-quad-border ${
               activeTab === 'logs'
                 ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -722,9 +722,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             <div className="flex gap-1.5 text-xs shrink-0">
               <button
                 onClick={() => setSubmissionFilter('pending')}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer tabular-nums ${
+                className={`px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer ${
                   submissionFilter === 'pending'
-                    ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] font-semibold'
+                    ? 'bg-[var(--accent-yellow-bg)] text-[var(--color-yellow)] font-semibold'
                     : 'bg-[var(--surface-main)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -802,7 +802,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                       {paper.status !== 'approved' && (
                         <button
                           onClick={() => handleApprove(paper)}
-                          className="px-3 py-1 text-xs font-semibold bg-[var(--color-green)] text-white dark:text-[#0A2640] rounded-lg transition-opacity hover:opacity-90 flex items-center gap-1 cursor-pointer"
+                          className="px-3 py-1 text-xs font-semibold bg-[var(--color-green)] text-white dark:text-[#1C2530] rounded-lg transition-opacity hover:opacity-90 flex items-center gap-1 cursor-pointer"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Approve</span>
@@ -883,19 +883,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               {removedPapers.map((paper) => (
                 <div
                   key={paper.id}
-                  className="bg-[var(--surface-main)] border border-[var(--color-red)]/30 rounded-xl p-4 sm:p-5 shadow-xs space-y-2.5"
+                  className="bg-[var(--surface-main)] border border-rose-500/30 rounded-xl p-4 sm:p-5 shadow-xs space-y-2.5"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="space-y-1.5 flex-1">
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-[var(--accent-red-bg)] text-[var(--color-red)] border border-[var(--color-red)]/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30">
                           Removed / Unpublished
                         </span>
                         <span className="font-semibold text-[var(--accent-blue)]">{paper.examBoard}</span>
                         <span className="text-[var(--text-muted)] opacity-60">·</span>
                         <span className="text-[var(--text-secondary)]">{paper.grade}</span>
                         <span className="text-[var(--text-muted)] opacity-60">·</span>
-                        <span className="font-mono tabular-nums text-[var(--text-muted)]">{paper.year}</span>
+                        <span className="font-mono text-[var(--text-muted)]">{paper.year}</span>
                       </div>
 
                       <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
@@ -912,7 +912,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                         </span>
                         <span>
                           Removed Date:{' '}
-                          <strong className="text-[var(--text-primary)] font-mono tabular-nums">
+                          <strong className="text-[var(--text-primary)] font-mono">
                             {paper.removedAt ? new Date(paper.removedAt).toLocaleString() : 'Recorded'}
                           </strong>
                         </span>
@@ -924,7 +924,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                         </span>
                       </div>
 
-                      <div className="text-xs text-[var(--color-red)] bg-[var(--accent-red-bg)] p-2.5 border border-[var(--color-red)]/20 rounded-lg">
+                      <div className="text-xs text-rose-300 bg-rose-500/10 p-2.5 border border-rose-500/20 rounded-lg">
                         <strong>Removal Reason:</strong> {paper.removalReason || 'Removed by Administrator'}
                       </div>
                     </div>
@@ -937,7 +937,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                           setConfirmRestorePaper(paper);
                         }}
                         disabled={restoringPaperId === paper.id}
-                        className="px-3 py-1.5 text-xs font-semibold bg-[var(--accent-blue)] text-white dark:text-[#0A2640] rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        className="px-3 py-1.5 text-xs font-semibold bg-[var(--accent-blue)] text-white rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>{restoringPaperId === paper.id ? 'Restoring...' : 'Restore Paper'}</span>
@@ -1010,7 +1010,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   <tbody className="divide-y divide-[var(--border-divider)]">
                     {auditLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-[var(--surface-elevated)]/50 transition-colors">
-                        <td className="p-3 font-mono tabular-nums text-[11px] text-[var(--text-muted)] whitespace-nowrap">
+                        <td className="p-3 font-mono text-[11px] text-[var(--text-muted)] whitespace-nowrap">
                           {new Date(log.created_at).toLocaleString()}
                         </td>
                         <td className="p-3 whitespace-nowrap">
@@ -1057,11 +1057,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="reject-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
         >
           <div className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl max-w-sm w-full p-5 space-y-3.5 text-xs text-[var(--text-primary)] shadow-xl">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-divider)]">
-              <h3 id="reject-modal-title" className="font-display font-semibold text-sm text-[var(--text-primary)]">
+              <h3 id="reject-modal-title" className="font-semibold text-sm text-[var(--text-primary)]">
                 Reject Submission
               </h3>
               <button
@@ -1112,11 +1112,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="takedown-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
         >
           <div className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl max-w-md w-full p-5 space-y-3.5 text-xs text-[var(--text-primary)] shadow-xl">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-divider)]">
-              <h3 id="takedown-modal-title" className="font-display font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
+              <h3 id="takedown-modal-title" className="font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4" />
                 <span>Confirm Paper Takedown</span>
               </h3>
@@ -1173,11 +1173,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="suspend-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
         >
           <div className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl max-w-md w-full p-5 space-y-3.5 text-xs text-[var(--text-primary)] shadow-xl">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-divider)]">
-              <h3 id="suspend-modal-title" className="font-display font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
+              <h3 id="suspend-modal-title" className="font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
                 <UserX className="w-4 h-4" />
                 <span>Account Suspension</span>
               </h3>
@@ -1249,11 +1249,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="factory-reset-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--modal-backdrop)] backdrop-blur-xs animate-in fade-in"
         >
           <div className="bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-xl max-w-lg w-full p-5 space-y-4 text-xs text-[var(--text-primary)] shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-divider)]">
-              <h3 id="factory-reset-title" className="font-display font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
+              <h3 id="factory-reset-title" className="font-semibold text-sm text-[var(--color-red)] flex items-center gap-1.5">
                 <ShieldAlert className="w-4 h-4" />
                 <span>Owner Factory Data Reset</span>
               </h3>
@@ -1276,13 +1276,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 Inspecting live database & storage counts...
               </div>
             ) : factoryResetPreview ? (
-              <div className="space-y-2 p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] font-mono tabular-nums text-[11px]">
+              <div className="space-y-2 p-3 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-divider)] font-mono text-[11px]">
                 <div className="font-semibold text-[var(--text-primary)]">Dry-Run Preview:</div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {(factoryResetPreview.storageBuckets || []).map((b: any) => (
                     <div key={b.bucket} className="flex justify-between">
                       <span className="text-[var(--text-secondary)]">bucket/{b.bucket}:</span>
-                      <span className="font-semibold tabular-nums">{b.objectCount} files</span>
+                      <span className="font-semibold">{b.objectCount} files</span>
                     </div>
                   ))}
                   {(factoryResetPreview.databaseTables || [])
@@ -1290,7 +1290,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                     .map((t: any) => (
                       <div key={t.table} className="flex justify-between">
                         <span className="text-[var(--text-secondary)]">{t.table}:</span>
-                        <span className="font-semibold tabular-nums">{t.rowCount} rows</span>
+                        <span className="font-semibold">{t.rowCount} rows</span>
                       </div>
                     ))}
                 </div>

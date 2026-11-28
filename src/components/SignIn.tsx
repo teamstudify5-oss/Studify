@@ -164,18 +164,18 @@ export const SignIn: React.FC<SignInProps> = ({
 
       {/* Studify Branding Header */}
       <div className="text-center space-y-3 relative z-10 mb-6">
-        <div className="w-12 h-12 rounded-2xl bg-[var(--accent-blue-bg)] border border-[var(--border-divider)] flex items-center justify-center mx-auto text-[var(--accent-blue)]">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-teal-500/15 to-emerald-500/10 border border-cyan-400/30 flex items-center justify-center mx-auto text-cyan-300 shadow-lg shadow-cyan-500/15">
           <BookOpen className="w-6 h-6" />
         </div>
 
         <div className="space-y-1">
-          <div className="text-xs font-mono uppercase tracking-widest text-[var(--accent-mint)] font-semibold">
+          <div className="text-xs font-mono uppercase tracking-widest text-cyan-400 font-semibold">
             Studify Platform
           </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F8FAFC] tracking-tight">
             Welcome back
           </h1>
-          <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs mx-auto">
+          <p className="text-xs sm:text-sm text-[#A7B4C8] leading-relaxed max-w-xs mx-auto">
             Continue your learning journey with verified past papers and exam resources.
           </p>
         </div>
@@ -183,17 +183,17 @@ export const SignIn: React.FC<SignInProps> = ({
 
       {/* Mode Switcher Tabs */}
       {onSwitchToSignUp && (
-        <div className="flex bg-[var(--surface-elevated)] p-1 rounded-xl border border-[var(--border-divider)] mb-6 relative z-10">
+        <div className="flex bg-[#0A1222]/80 p-1 rounded-2xl border border-white/[0.08] mb-6 relative z-10">
           <button
             type="button"
-            className="flex-1 py-2 text-xs font-semibold rounded-lg transition-all bg-[var(--surface-main)] text-[var(--text-primary)] shadow-xs border border-[var(--border-divider)]"
+            className="flex-1 py-2 text-xs font-semibold rounded-xl transition-all bg-[#15233D] text-cyan-300 shadow-md border border-cyan-400/30"
           >
             Sign In
           </button>
           <button
             type="button"
             onClick={onSwitchToSignUp}
-            className="flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+            className="flex-1 py-2 text-xs font-semibold rounded-xl transition-all text-[#A7B4C8] hover:text-[#F8FAFC] cursor-pointer"
           >
             Sign Up
           </button>
@@ -202,8 +202,8 @@ export const SignIn: React.FC<SignInProps> = ({
 
       {/* Success Message ABOVE the form if user comes from successful signup */}
       {infoMessage && (
-        <div className="p-3.5 rounded-xl bg-[var(--accent-mint-bg)] border border-[var(--accent-mint)]/30 flex items-start gap-2.5 text-[var(--accent-mint)] text-xs text-left mb-4 relative z-10 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5 text-emerald-300 text-xs text-left mb-4 relative z-10 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
           <span>{infoMessage}</span>
         </div>
       )}
@@ -212,11 +212,11 @@ export const SignIn: React.FC<SignInProps> = ({
       <form onSubmit={handleSignIn} className="space-y-4 relative z-10">
         {/* Email Address (Pre-filled from signup) */}
         <div className="space-y-1.5 text-left">
-          <label htmlFor="signin-email" className="block text-xs font-medium text-[var(--text-secondary)]">
+          <label htmlFor="signin-email" className="block text-xs font-medium text-[#A7B4C8]">
             Email address
           </label>
           <div className="relative flex items-center">
-            <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
+            <Mail className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
             <input
               id="signin-email"
               type="email"
@@ -226,7 +226,7 @@ export const SignIn: React.FC<SignInProps> = ({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@example.com"
-              className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
+              className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
             />
           </div>
         </div>
@@ -234,18 +234,18 @@ export const SignIn: React.FC<SignInProps> = ({
         {/* Password with Show/Hide toggle */}
         <div className="space-y-1.5 text-left">
           <div className="flex items-center justify-between">
-            <label htmlFor="signin-password" className="block text-xs font-medium text-[var(--text-secondary)]">
+            <label htmlFor="signin-password" className="block text-xs font-medium text-[#A7B4C8]">
               Password
             </label>
             <button
               type="button"
-              className="text-[11px] text-[var(--accent-blue)] hover:underline transition-colors"
+              className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors"
             >
               Forgot password?
             </button>
           </div>
           <div className="relative flex items-center">
-            <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
+            <Lock className="w-4 h-4 text-[#A7B4C8]/60 absolute left-3.5 pointer-events-none" />
             <input
               id="signin-password"
               type={showPassword ? 'text' : 'password'}
@@ -255,13 +255,13 @@ export const SignIn: React.FC<SignInProps> = ({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full pl-10 pr-10 py-2.5 text-xs sm:text-sm bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-blue)] transition-colors disabled:opacity-60"
+              className="w-full pl-10 pr-10 py-2.5 text-xs sm:text-sm bg-[#0A1222] border border-white/[0.1] rounded-xl text-[#F8FAFC] placeholder-[#A7B4C8]/40 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all disabled:opacity-60"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 transition-colors cursor-pointer"
+              className="absolute right-3 text-[#A7B4C8] hover:text-[#F8FAFC] p-1 transition-colors cursor-pointer"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -275,17 +275,17 @@ export const SignIn: React.FC<SignInProps> = ({
             role="checkbox"
             aria-checked={rememberMe}
             onClick={() => setRememberMe(!rememberMe)}
-            className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
+            className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all cursor-pointer ${
               rememberMe
-                ? 'bg-[var(--accent-blue)] border-[var(--accent-blue)] text-white dark:text-[#0A2640]'
-                : 'bg-[var(--input-bg)] border-[var(--input-border)] hover:border-[var(--border-hover)]'
+                ? 'bg-cyan-500 border-cyan-400 text-[#050914]'
+                : 'bg-[#0A1222] border-white/[0.2] hover:border-white/[0.3]'
             }`}
           >
             {rememberMe && <Check className="w-3 h-3 stroke-[3]" />}
           </button>
           <label
             onClick={() => setRememberMe(!rememberMe)}
-            className="text-xs text-[var(--text-secondary)] cursor-pointer select-none"
+            className="text-xs text-[#A7B4C8] cursor-pointer select-none"
           >
             Remember me
           </label>
@@ -295,15 +295,15 @@ export const SignIn: React.FC<SignInProps> = ({
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-2.5 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs sm:text-sm font-bold rounded-xl transition-opacity mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full py-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-[#050914] text-xs sm:text-sm font-extrabold rounded-xl transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.99] mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? 'Signing In...' : 'Log In'}
         </button>
 
         {/* Error Message Display below form */}
         {errorMessage && (
-          <div className="p-3 rounded-xl bg-[var(--accent-red-bg)] border border-[var(--color-red)]/25 flex items-start gap-2.5 text-[var(--color-red)] text-xs text-left animate-in fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-rose-300 text-xs text-left animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -345,12 +345,12 @@ export const SignIn: React.FC<SignInProps> = ({
 
         {/* Switch to Sign Up */}
         {onSwitchToSignUp && (
-          <div className="pt-2 text-center text-xs text-[var(--text-secondary)]">
+          <div className="pt-2 text-center text-xs text-[#A7B4C8]">
             Don't have an account?{' '}
             <button
               type="button"
               onClick={onSwitchToSignUp}
-              className="font-semibold text-[var(--accent-blue)] hover:underline underline-offset-2 transition-colors ml-1 cursor-pointer"
+              className="font-semibold text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors ml-1 cursor-pointer"
             >
               Sign up
             </button>

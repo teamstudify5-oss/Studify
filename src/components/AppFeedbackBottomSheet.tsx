@@ -132,7 +132,7 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
     <>
       {/* Dimmed backdrop */}
       <div
-        className="fixed inset-0 bg-[var(--modal-backdrop)] z-50 transition-opacity duration-200"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 transition-opacity duration-200"
         onClick={() => {
           if (!isSavingRating && !isSavingReview) onClose();
         }}
@@ -144,7 +144,7 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-bottom-sheet-title"
-        className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-lg mx-auto bg-[var(--modal-bg)] border-t sm:border-x border-[var(--border-divider)] rounded-t-2xl shadow-xl p-5 sm:p-6 text-[var(--text-primary)]"
+        className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-lg mx-auto bg-[var(--surface-main)] border-t sm:border-x border-[var(--border-divider)] rounded-t-3xl shadow-2xl p-5 sm:p-6 text-[var(--text-primary)]"
       >
         {/* Subtle drag handle bar */}
         <div className="w-10 h-1 bg-[var(--text-muted)]/30 rounded-full mx-auto mb-4" />
@@ -280,14 +280,14 @@ export const AppFeedbackBottomSheet: React.FC<AppFeedbackBottomSheetProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSavingRating || isSavingReview}
-              className="px-3.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg border border-[var(--border-divider)] bg-[var(--surface-elevated)] cursor-pointer whitespace-nowrap disabled:opacity-40"
+              className="btn-quad-border px-3.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg cursor-pointer whitespace-nowrap disabled:opacity-40"
             >
               Close
             </button>
             <button
               type="submit"
               disabled={isSavingReview || isSavingRating || selectedStars < 1}
-              className="px-4 py-2 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-lg transition-opacity flex items-center gap-1.5 disabled:opacity-40 cursor-pointer whitespace-nowrap"
+              className="btn-quad-border px-4 py-1.5 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer whitespace-nowrap"
             >
               {isSavingReview ? (
                 <>

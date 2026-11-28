@@ -28,7 +28,7 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-[var(--modal-backdrop)] z-50 transition-opacity duration-200"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 transition-opacity duration-200"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -38,17 +38,17 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="download-limit-title"
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100%-2rem)] max-w-md mx-auto bg-[var(--modal-bg)] border border-[var(--border-divider)] rounded-2xl shadow-xl p-6 text-[var(--text-primary)] space-y-5"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md mx-auto bg-[var(--surface-main)] border border-[var(--border-divider)] rounded-3xl shadow-2xl p-6 text-[var(--text-primary)] space-y-5 animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Header with lock icon */}
         <div className="flex items-start justify-between">
-          <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue-bg)] border border-[var(--border-divider)] text-[var(--accent-blue)] flex items-center justify-center">
+          <div className="w-11 h-11 rounded-2xl bg-[var(--color-yellow)]/15 border border-[var(--color-yellow)]/30 text-[var(--color-yellow)] flex items-center justify-center shadow-xs">
             <Lock className="w-5 h-5" />
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
@@ -59,7 +59,7 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
         <div className="space-y-2">
           <h3
             id="download-limit-title"
-            className="font-display text-lg font-bold tracking-tight text-[var(--text-primary)] leading-snug"
+            className="text-lg sm:text-xl font-bold tracking-tight text-[var(--text-primary)] leading-snug"
           >
             You've used your 10 free downloads. Upload 2 PDFs to unlock your next 10 downloads!
           </h3>
@@ -69,20 +69,20 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
         </div>
 
         {/* Contribution Progress Tracker: 0/2, 1/2, 2/2 */}
-        <div className="p-4 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-divider)] space-y-2.5">
+        <div className="p-4 rounded-2xl bg-[var(--surface-secondary)] border border-[var(--border-divider)] space-y-2.5">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-[var(--text-primary)]">
               Contribution Progress
             </span>
-            <span className="font-mono tabular-nums font-bold text-[var(--accent-blue)]">
+            <span className="font-mono font-bold text-[var(--accent-blue)]">
               {currentUploads}/2 PDFs uploaded
             </span>
           </div>
 
           {/* Progress bar */}
-          <div className="w-full h-2 bg-[var(--surface-main)] rounded-full overflow-hidden border border-[var(--border-divider)]">
+          <div className="w-full h-2.5 bg-[var(--surface-elevated)] rounded-full overflow-hidden border border-[var(--border-divider)]">
             <div
-              className="h-full bg-[var(--accent-mint)] transition-all duration-300 rounded-full"
+              className="h-full bg-gradient-to-r from-[var(--color-yellow)] to-[var(--color-green)] transition-all duration-500 rounded-full"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -94,15 +94,15 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
         </div>
 
         {/* Notice that browsing remains 100% active */}
-        <div className="flex items-start gap-2 text-xs text-[var(--text-secondary)] bg-[var(--accent-mint-bg)] border border-[var(--accent-mint)]/25 rounded-xl p-3">
-          <CheckCircle2 className="w-4 h-4 text-[var(--accent-mint)] shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 text-xs text-[var(--text-secondary)] bg-[var(--color-green)]/10 border border-[var(--color-green)]/20 rounded-xl p-3">
+          <CheckCircle2 className="w-4 h-4 text-[var(--color-green)] shrink-0 mt-0.5" />
           <span>
             You can still browse, search, and read all question papers directly in the web reader. Only direct PDF downloads are locked.
           </span>
         </div>
 
         {/* Action Buttons */}
-        <div className="space-y-2.5 pt-1">
+        <div className="space-y-2.5 pt-2">
           {isAuthenticated ? (
             <button
               type="button"
@@ -110,7 +110,7 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
                 onClose();
                 onNavigateToUpload();
               }}
-              className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-xl transition-opacity flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              className="btn-quad-border w-full py-3 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               <UploadCloud className="w-4 h-4" />
               <span>Upload PDF to Unlock ({currentUploads}/2)</span>
@@ -123,10 +123,10 @@ export const DownloadLimitModal: React.FC<DownloadLimitModalProps> = ({
                 onClose();
                 onRequireLogin();
               }}
-              className="w-full py-2.5 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white dark:text-[#0A2640] text-xs font-semibold rounded-xl transition-opacity flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              className="btn-quad-border w-full py-3 px-4 bg-[var(--accent-blue)] hover:opacity-90 text-white text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               <User className="w-4 h-4" />
-              <span>Sign In &amp; Upload 2 PDFs</span>
+              <span>Sign In & Upload 2 PDFs</span>
               <ArrowRight className="w-4 h-4 ml-auto" />
             </button>
           )}

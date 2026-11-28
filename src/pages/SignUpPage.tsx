@@ -21,9 +21,9 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({
         <button
           type="button"
           onClick={onNavigateToHome}
-          className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors group cursor-pointer"
+          className="inline-flex items-center gap-2 text-xs text-[#A7B4C8] hover:text-[#F8FAFC] transition-colors group cursor-pointer"
         >
-          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
           <span>Back to Studify</span>
         </button>
       </div>

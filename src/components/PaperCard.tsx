@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Bookmark, Star, ArrowUpRight, FolderPlus, Edit2, Trash2 } from 'lucide-react';
+import { Download, Bookmark, Star, ArrowUpRight, FolderPlus, Camera, Edit2, Trash2 } from 'lucide-react';
 import { Paper } from '../types';
 
 interface PaperCardProps {
@@ -27,28 +27,38 @@ export const PaperCard: React.FC<PaperCardProps> = ({
   isBookmarked = false,
   isDownloading = false,
 }) => {
-  const formatLabel = paper.isImageBased
-    ? `${paper.pageCount || paper.imageUrls?.length || 1} Pages`
-    : 'PDF';
-
   return (
     <div
       onClick={() => onSelect(paper)}
-      className="group relative bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)]/40 border border-[var(--border-divider)] hover:border-[var(--border-hover)] rounded-xl p-5 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 flex flex-col justify-between"
+      className="group relative bg-[var(--surface-main)]/85 backdrop-blur-md hover:bg-[var(--surface-elevated)]/90 border border-[var(--border-divider)] hover:border-[var(--border-hover)] rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md"
     >
-      <div className="space-y-2.5">
-        {/* Clean Zero-Pill Metadata Header */}
+      <div className="space-y-2.5 relative z-10">
+        {/* Header Tags & Bookmark - Clean zero-pill metadata */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-            <span className="font-semibold text-[var(--text-primary)]">{paper.examBoard}</span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
+            <span className="font-semibold text-[var(--accent-blue)]">{paper.examBoard}</span>
+            <span aria-hidden="true" className="text-[var(--text-muted)] opacity-60">·</span>
             <span>{paper.grade}</span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-            <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{paper.year}</span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-            <span className="font-mono text-[11px] tabular-nums text-[var(--accent-mint)] font-medium">
-              {formatLabel}
-            </span>
+            <span aria-hidden="true" className="text-[var(--text-muted)] opacity-60">·</span>
+            <span className="font-mono text-[11px] text-[var(--text-muted)]">{paper.year}</span>
+            {paper.eventName && (
+              <>
+                <span aria-hidden="true" className="text-[var(--text-muted)] opacity-60">·</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] font-medium">
+                  {paper.eventName}
+                </span>
+              </>
+            )}
+            {paper.isImageBased ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-green-bg)] text-[var(--color-green)] font-medium border border-[var(--color-green)]/20 inline-flex items-center gap-1">
+                <Camera className="w-3 h-3" />
+                <span>{paper.pageCount || paper.imageUrls?.length || 1} P</span>
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-secondary)] text-[var(--text-muted)] font-mono border border-[var(--border-divider)]">
+                PDF
+              </span>
+            )}
           </div>
 
           {onBookmark && (
@@ -59,10 +69,10 @@ export const PaperCard: React.FC<PaperCardProps> = ({
                 e.stopPropagation();
                 onBookmark(paper, e);
               }}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 isBookmarked
-                  ? 'bg-[var(--accent-blue-bg)] text-[var(--text-primary)] border-[var(--border-hover)]'
-                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
+                  ? 'bg-[var(--accent-blue-bg)] text-[var(--accent-blue)] border border-[var(--accent-blue)]/30'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]'
               }`}
               title={isBookmarked ? 'Remove bookmark' : 'Bookmark paper'}
               aria-label="Bookmark"
@@ -73,34 +83,35 @@ export const PaperCard: React.FC<PaperCardProps> = ({
         </div>
 
         {/* Title */}
-        <h3 className="font-display text-sm sm:text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--accent-cobalt)] transition-colors leading-snug line-clamp-2">
+        <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-blue)] transition-colors leading-snug line-clamp-2">
           {paper.title}
         </h3>
 
-        {/* Chapter & Attribution */}
+        {/* Chapter & Uploader Attribution */}
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
-          <span>{paper.subject}</span>
           {paper.chapter && (
             <>
-              <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-              <span className="text-[var(--accent-mint)] font-medium">{paper.chapter}</span>
+              <span className="text-[var(--color-green)] font-medium">
+                {paper.chapter}
+              </span>
+              <span aria-hidden="true" className="text-[var(--text-muted)] opacity-60">·</span>
             </>
           )}
-          <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
           <span>
-            By <strong className="font-medium text-[var(--text-primary)]">{paper.uploaderDisplayName || paper.submittedBy?.name || 'Community'}</strong>
+            Uploaded by <strong className="font-medium text-[var(--text-primary)]">{paper.uploaderDisplayName || paper.submittedBy?.name || 'Community'}</strong>
           </span>
         </div>
 
-        {/* Description */}
+        {/* Subject & Description */}
         <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
           {paper.description || `${paper.subject} previous year question paper.`}
         </p>
       </div>
 
-      {/* Footer Info & Clean Actions */}
-      <div className="pt-3.5 mt-4 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs tabular-nums">
+      {/* Footer Info & Compact Purposeful Actions */}
+      <div className="pt-3.5 mt-3.5 border-t border-[var(--border-divider)] flex flex-wrap items-center justify-between gap-2 relative z-10">
+        {/* Rating & marks */}
+        <div className="flex items-center gap-2 text-xs">
           {paper.ratingCount && paper.ratingCount > 0 && paper.rating ? (
             <div className="flex items-center gap-1 text-[var(--color-yellow)] font-medium font-mono text-[11px]">
               <Star className="w-3.5 h-3.5 fill-current" />
@@ -108,19 +119,23 @@ export const PaperCard: React.FC<PaperCardProps> = ({
               <span className="text-[var(--text-muted)] text-[10px]">({paper.ratingCount})</span>
             </div>
           ) : (
-            <span className="text-[var(--text-muted)] text-[11px]">Unrated</span>
+            <div className="flex items-center gap-1 text-[var(--text-muted)] text-[11px]">
+              <Star className="w-3 h-3 opacity-60" />
+              <span>Not rated yet</span>
+            </div>
           )}
 
           {paper.totalMarks && paper.totalMarks > 0 && (
             <>
-              <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-              <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                {paper.totalMarks} Marks
+              <span aria-hidden="true" className="text-[var(--text-muted)] opacity-50">·</span>
+              <span className="text-xs text-[var(--text-muted)] font-mono">
+                {paper.totalMarks}M
               </span>
             </>
           )}
         </div>
 
+        {/* Compact Action Buttons */}
         <div className="flex items-center gap-1.5 shrink-0">
           {canManage && onEdit && (
             <button
@@ -130,7 +145,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
                 e.stopPropagation();
                 onEdit(paper, e);
               }}
-              className="p-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--accent-blue)] transition-colors cursor-pointer shadow-xs"
               title="Edit paper metadata"
               aria-label={`Edit ${paper.title}`}
             >
@@ -146,7 +161,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
                 e.stopPropagation();
                 onDelete(paper, e);
               }}
-              className="p-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--accent-red-bg)] border border-[var(--border-divider)] text-[var(--color-red)] transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-[var(--accent-red-bg)] hover:opacity-90 border border-[var(--color-red)]/30 text-[var(--color-red)] transition-opacity cursor-pointer shadow-xs"
               title="Delete paper permanently"
               aria-label={`Delete ${paper.title}`}
             >
@@ -162,7 +177,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
                 e.stopPropagation();
                 onAddToProject(paper, e);
               }}
-              className="p-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-[var(--text-secondary)] hover:text-[var(--accent-blue)] transition-colors cursor-pointer shadow-xs"
               title="Add to Study Project"
               aria-label="Add to Study Project"
             >
@@ -179,7 +194,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
                 e.stopPropagation();
                 onDownload(paper, e);
               }}
-              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-main)] hover:bg-[var(--surface-elevated)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-secondary)] border border-[var(--border-divider)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-60 shadow-xs"
               title={
                 paper.isImageBased
                   ? (paper.imagePaths?.length || paper.imageUrls?.length || 1) > 1
@@ -201,9 +216,9 @@ export const PaperCard: React.FC<PaperCardProps> = ({
               e.stopPropagation();
               onSelect(paper);
             }}
-            className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white dark:text-[#0A2640] text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer whitespace-nowrap"
+            className="px-3 py-1.5 rounded-lg bg-[var(--accent-blue)] text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 shadow-xs cursor-pointer"
           >
-            <span>Open</span>
+            <span>View</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
         </div>

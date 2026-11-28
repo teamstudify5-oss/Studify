@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, RotateCcw, SlidersHorizontal, FileText, RefreshCw } from 'lucide-react';
+import { Search, RotateCcw, SlidersHorizontal, FileText } from 'lucide-react';
 import { Paper, FilterState } from '../types';
 import { PaperCard } from '../components/PaperCard';
 import { EXAM_BOARDS, GRADE_LEVELS, POPULAR_SUBJECTS, YEARS } from '../data/samplePapers';
@@ -12,9 +12,6 @@ import { storageService } from '../services/storage';
 
 interface BrowsePageProps {
   papers: Paper[];
-  isLoadingPapers?: boolean;
-  papersError?: string | null;
-  onRetryLoadPapers?: () => void;
   initialFilters?: Partial<FilterState> & { search?: string };
   onSelectPaper: (paper: Paper) => void;
   onDownloadPaper: (paper: Paper, e: React.MouseEvent) => void;
@@ -27,9 +24,6 @@ interface BrowsePageProps {
 
 export const BrowsePage: React.FC<BrowsePageProps> = ({
   papers,
-  isLoadingPapers = false,
-  papersError = null,
-  onRetryLoadPapers,
   initialFilters,
   onSelectPaper,
   onDownloadPaper,
@@ -324,48 +318,6 @@ export const BrowsePage: React.FC<BrowsePageProps> = ({
               />
             );
           })}
-        </div>
-      ) : isLoadingPapers && visiblePapers.length === 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5" aria-label="Loading question papers">
-          {[0, 1, 2, 3, 4, 5].map((idx) => (
-            <div
-              key={idx}
-              className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-5 shadow-xs animate-pulse space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <div className="h-3 w-28 rounded bg-[var(--surface-elevated)]" />
-                <div className="h-3 w-10 rounded bg-[var(--surface-elevated)]" />
-              </div>
-              <div className="space-y-2">
-                <div className="h-4 w-5/6 rounded bg-[var(--surface-elevated)]" />
-                <div className="h-3 w-1/2 rounded bg-[var(--surface-elevated)]" />
-              </div>
-              <div className="pt-3 border-t border-[var(--border-divider)] flex items-center justify-between">
-                <div className="h-3 w-20 rounded bg-[var(--surface-elevated)]" />
-                <div className="h-7 w-24 rounded-lg bg-[var(--surface-elevated)]" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : papersError && visiblePapers.length === 0 ? (
-        <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-12 text-center space-y-3 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue-bg)] flex items-center justify-center mx-auto text-[var(--accent-blue)]">
-            <RefreshCw className="w-5 h-5" />
-          </div>
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Could not load question papers</h3>
-          <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
-            {papersError}
-          </p>
-          {onRetryLoadPapers && (
-            <button
-              type="button"
-              onClick={onRetryLoadPapers}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[var(--accent-blue)] text-white font-semibold text-xs rounded-lg transition-all shadow-xs cursor-pointer whitespace-nowrap btn-quad-border"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Retry Loading</span>
-            </button>
-          )}
         </div>
       ) : (
         <div className="bg-[var(--surface-main)]/85 backdrop-blur-md border border-[var(--border-divider)] rounded-xl p-12 text-center space-y-3 shadow-xs">
